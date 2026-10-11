@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "llm_trace/trace_session.hpp"
@@ -44,6 +45,7 @@ enum class Action {
   CycleSort,
   ToggleHelp,
   Close,
+  Save,  // handled by the app, which owns file I/O
   Quit,
   FilterInput,
   FilterBackspace,
@@ -87,6 +89,7 @@ class Controller {
   const AppState& state() const { return state_; }
   const DisplayOptions& display() const { return display_; }
   const TraceEvent* selected() const;
+  void set_notice(std::string notice) { state_.notice = std::move(notice); }
 
  private:
   void rebuild_view();

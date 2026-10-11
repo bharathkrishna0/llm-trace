@@ -45,12 +45,15 @@ std::string usage() {
          "Local-first tracing and replay for transformer inference.\n"
          "\n"
          "Usage:\n"
-         "  llm-trace --demo [demo options] [display options]\n"
+         "  llm-trace --demo [demo options] [--output FILE] [display options]\n"
+         "  llm-trace --open FILE [--output FILE] [display options]\n"
          "  llm-trace --help | --version\n"
          "\n"
          "Modes:\n"
          "      --demo             Interactive TUI over a deterministic synthetic trace.\n"
          "                         Values come from a cost model, not a real model.\n"
+         "      --open FILE        Replay a saved llm-trace JSONL file offline.\n"
+         "      --output FILE      Save the trace as JSONL on exit (and with 's').\n"
          "\n"
          "Demo options:\n"
          "      --layers N         Decoder layers (1-256, default 12)\n"
@@ -122,9 +125,19 @@ ParseResult parse(const std::vector<std::string>& args) {
       if (!take() || !parse_frame(value, frame))
         return fail("--print-frame expects WIDTHxHEIGHT (20-1000 x 5-500)");
       o.print_frame = frame;
+    } else if (arg == "--open" || arg == "--output") {
+      if (!take() || value.empty()) return fail(arg + " expects a file path");
+      (arg == "--open" ? o.open : o.output) = value;
     } else {
       return fail("unknown option: " + args[i]);
     }
+  }
+  if (o.open && o.demo) {
+    result.error = "--open and --demo cannot be combined";
+  } else if (o.output && !o.open && !o.demo) {
+    result.error = "--output needs --demo or --open";
+  } else if (o.output && o.open && *o.output == *o.open) {
+    result.error = "--output must differ from --open";
   }
   return result;
 }

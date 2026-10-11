@@ -34,6 +34,7 @@ KeyResult map_key(const Event& event, Mode mode) {
   if (event == Event::Character('p')) return {Action::TogglePause, {}};
   if (event == Event::Character('m')) return {Action::ToggleMetrics, {}};
   if (event == Event::Character('t')) return {Action::CycleSort, {}};
+  if (event == Event::Character('s')) return {Action::Save, {}};
   if (event == Event::Character('?')) return {Action::ToggleHelp, {}};
   if (event == Event::Escape) return {Action::Close, {}};
   if (event == Event::Character('q')) return {Action::Quit, {}};

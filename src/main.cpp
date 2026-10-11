@@ -34,11 +34,48 @@ int main(int argc, char** argv) {
   demo.synthetic.steps_per_second = o.rate;
   demo.buffer_capacity = o.buffer;
 
+  demo.output = o.output;
+
+  if (o.open) {
+    LoadedTrace trace;
+    try {
+      trace = load_trace(*o.open);
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "llm-trace: cannot load %s: %s\n", o.open->c_str(), e.what());
+      return 1;
+    }
+    for (const auto& w : trace.warnings)
+      std::fprintf(stderr, "llm-trace: warning: %s\n", w.c_str());
+    if (o.print_frame) {
+      if (o.output) {
+        try {
+          write_jsonl(*o.output, trace.metadata, trace.events);
+        } catch (const std::exception& e) {
+          std::fprintf(stderr, "llm-trace: could not save %s: %s\n", o.output->c_str(), e.what());
+          return 1;
+        }
+      }
+      const auto [w, h] = *o.print_frame;
+      std::fputs(tui::render_replay_frame(trace, demo.display, w, h, demo.display.color).c_str(),
+                 stdout);
+      return 0;
+    }
+    tui::ReplayOptions replay;
+    replay.display = demo.display;
+    replay.output = o.output;
+    return tui::run_replay(trace, replay);
+  }
+
   if (o.print_frame) {
     const auto [w, h] = *o.print_frame;
-    const std::string frame = o.demo
-                                  ? tui::render_demo_frame(demo, w, h, demo.display.color)
-                                  : tui::render_empty_frame(demo.display, w, h, demo.display.color);
+    std::string frame;
+    try {
+      frame = o.demo ? tui::render_demo_frame(demo, w, h, demo.display.color)
+                     : tui::render_empty_frame(demo.display, w, h, demo.display.color);
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "llm-trace: %s\n", e.what());
+      return 1;
+    }
     std::fputs(frame.c_str(), stdout);
     return 0;
   }

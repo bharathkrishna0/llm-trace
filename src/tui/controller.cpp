@@ -96,6 +96,7 @@ bool Controller::apply(const KeyResult& key, LayoutMode layout, std::size_t page
   if (key.action != Action::None) state_.notice.clear();
   switch (key.action) {
     case Action::None:
+    case Action::Save:
       break;
     case Action::MoveDown:
       select_row(row + 1, page);

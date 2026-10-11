@@ -48,6 +48,8 @@ TEST_CASE("key map is centralised and filter mode captures text") {
   CHECK(map_key(Event::Character('j'), Mode::Normal).action == Action::MoveDown);
   CHECK(map_key(Event::ArrowUp, Mode::Normal).action == Action::MoveUp);
   CHECK(map_key(Event::Character('q'), Mode::Normal).action == Action::Quit);
+  CHECK(map_key(Event::Character('s'), Mode::Normal).action == Action::Save);
+  CHECK(map_key(Event::Character('s'), Mode::Filter).action == Action::FilterInput);
   CHECK(map_key(Event::Escape, Mode::Normal).action == Action::Close);
   const auto typed = map_key(Event::Character('q'), Mode::Filter);
   CHECK(typed.action == Action::FilterInput);
