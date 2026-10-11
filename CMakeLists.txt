@@ -35,6 +35,7 @@ add_library(llm_trace_core
   src/core/event.cpp
   src/core/format.cpp
   src/core/collector.cpp
+  src/core/synthetic.cpp
   src/core/trace_session.cpp)
 target_include_directories(llm_trace_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 find_package(Threads REQUIRED)
@@ -42,9 +43,29 @@ target_link_libraries(llm_trace_core PUBLIC Threads::Threads)
 target_compile_definitions(llm_trace_core PUBLIC LLM_TRACE_VERSION="${PROJECT_VERSION}")
 llm_trace_set_warnings(llm_trace_core)
 
+set(FTXUI_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(FTXUI_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(FTXUI_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(FTXUI_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(ftxui
+  URL https://github.com/ArthurSonzogni/FTXUI/archive/refs/tags/v5.0.0.tar.gz
+  URL_HASH SHA256=a2991cb222c944aee14397965d9f6b050245da849d8c5da7c72d112de2786b5b
+  DOWNLOAD_EXTRACT_TIMESTAMP ON)
+FetchContent_MakeAvailable(ftxui)
+
+# TUI library: FTXUI rendering and key handling over TraceSession.
+add_library(llm_trace_tui
+  src/tui/app.cpp
+  src/tui/components.cpp
+  src/tui/controller.cpp
+  src/tui/key_bindings.cpp)
+target_include_directories(llm_trace_tui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(llm_trace_tui PUBLIC llm_trace_core ftxui::component ftxui::dom ftxui::screen)
+llm_trace_set_warnings(llm_trace_tui)
+
 add_executable(llm-trace src/main.cpp src/cli.cpp)
 target_include_directories(llm-trace PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(llm-trace PRIVATE llm_trace_core)
+target_link_libraries(llm-trace PRIVATE llm_trace_tui)
 llm_trace_set_warnings(llm-trace)
 
 if(LLM_TRACE_BUILD_TESTS)
