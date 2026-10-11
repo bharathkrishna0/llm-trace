@@ -11,6 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(LLM_TRACE_BUILD_TESTS "Build unit and integration tests" ON)
+option(LLM_TRACE_BUILD_BENCH "Build the llm_trace_bench micro-benchmarks" ON)
 option(LLM_TRACE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
 include(FetchContent)
@@ -91,6 +92,14 @@ if(LLM_TRACE_BUILD_TESTS)
     DOWNLOAD_EXTRACT_TIMESTAMP ON)
   FetchContent_MakeAvailable(Catch2)
   add_subdirectory(tests)
+endif()
+
+if(LLM_TRACE_BUILD_BENCH)
+  add_executable(llm_trace_bench bench/llm_trace_bench.cpp)
+  target_link_libraries(llm_trace_bench PRIVATE llm_trace_core llm_trace_tui)
+  target_include_directories(llm_trace_bench PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_compile_definitions(llm_trace_bench PRIVATE LLM_TRACE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+  llm_trace_set_warnings(llm_trace_bench)
 endif()
 
 # Optional: the ONNX Runtime sample that writes a real profile and measures profiling
