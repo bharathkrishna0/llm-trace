@@ -13,7 +13,7 @@ TEST_CASE("durations always carry a unit") {
   CHECK(format_duration_ns(std::optional<std::uint64_t>{}) == "n/a");
 }
 
-TEST_CASE("bytes, counts and shapes are formatted") {
+TEST_CASE("bytes counts and shapes are formatted") {
   CHECK(format_bytes(512) == "512 B");
   CHECK(format_bytes(98304) == "96.0 KiB");
   CHECK(format_count(49152) == "49,152");

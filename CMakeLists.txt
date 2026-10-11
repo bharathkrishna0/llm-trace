@@ -32,8 +32,13 @@ endfunction()
 
 # Core library: must not depend on any TUI library.
 add_library(llm_trace_core
-  src/core/format.cpp)
+  src/core/event.cpp
+  src/core/format.cpp
+  src/core/collector.cpp
+  src/core/trace_session.cpp)
 target_include_directories(llm_trace_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+find_package(Threads REQUIRED)
+target_link_libraries(llm_trace_core PUBLIC Threads::Threads)
 target_compile_definitions(llm_trace_core PUBLIC LLM_TRACE_VERSION="${PROJECT_VERSION}")
 llm_trace_set_warnings(llm_trace_core)
 

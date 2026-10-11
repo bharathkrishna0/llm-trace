@@ -3,6 +3,9 @@ include(Catch)
 add_executable(llm_trace_tests
   unit/test_format.cpp
   unit/test_cli.cpp
+  unit/test_ring_buffer.cpp
+  unit/test_collector.cpp
+  unit/test_trace_session.cpp
   ${CMAKE_SOURCE_DIR}/src/cli.cpp)
 target_include_directories(llm_trace_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(llm_trace_tests PRIVATE llm_trace_core Catch2::Catch2WithMain)
