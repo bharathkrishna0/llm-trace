@@ -98,27 +98,27 @@ void emit_step(const SyntheticConfig& cfg, Prng& rng, std::vector<TraceEvent>& o
   for (int layer = 0; layer < cfg.layers; ++layer) {
     const std::string prefix = layer_name(layer);
     b.op(prefix + ".input_layernorm", Category::Normalization, "LayerNormalization", layer,
-         1'500.0 + q * hd / 32.0, {tensor("hidden_states", hidden)},
-         {tensor("normed", hidden)});
+         1'500.0 + q * hd / 32.0, {tensor("hidden_states", hidden)}, {tensor("normed", hidden)});
     b.op(prefix + ".attention.qkv_proj", Category::Attention, "MatMul", layer,
-         matmul_ns(q, hd, 3 * hd), {tensor("normed", hidden)},
-         {tensor("qkv", {1, q_len, 3 * h})});
-    b.op(prefix + ".attention.scores", Category::Attention, "MatMul", layer,
-         matmul_ns(q * static_cast<double>(heads), static_cast<double>(head_dim), kv),
-         {tensor("query", {1, heads, q_len, head_dim}), tensor("key", {1, heads, kv_len, head_dim})},
-         {tensor("scores", {1, heads, q_len, kv_len})});
+         matmul_ns(q, hd, 3 * hd), {tensor("normed", hidden)}, {tensor("qkv", {1, q_len, 3 * h})});
+    b.op(
+        prefix + ".attention.scores", Category::Attention, "MatMul", layer,
+        matmul_ns(q * static_cast<double>(heads), static_cast<double>(head_dim), kv),
+        {tensor("query", {1, heads, q_len, head_dim}), tensor("key", {1, heads, kv_len, head_dim})},
+        {tensor("scores", {1, heads, q_len, kv_len})});
     b.op(prefix + ".attention.softmax", Category::Attention, "Softmax", layer,
          1'000.0 + q * kv * static_cast<double>(heads) / 16.0,
          {tensor("scores", {1, heads, q_len, kv_len})},
          {tensor("probs", {1, heads, q_len, kv_len})});
-    b.op(prefix + ".attention.context", Category::Attention, "MatMul", layer,
-         matmul_ns(q * static_cast<double>(heads), kv, static_cast<double>(head_dim)),
-         {tensor("probs", {1, heads, q_len, kv_len}), tensor("value", {1, heads, kv_len, head_dim})},
-         {tensor("context", {1, heads, q_len, head_dim})});
-    b.op(prefix + ".attention.out_proj", Category::Attention, "MatMul", layer,
-         matmul_ns(q, hd, hd), {tensor("context", hidden)}, {tensor("attn_out", hidden)});
-    b.op(prefix + ".post_attention_layernorm", Category::Normalization, "LayerNormalization",
-         layer, 1'500.0 + q * hd / 32.0, {tensor("attn_out", hidden)}, {tensor("normed", hidden)});
+    b.op(
+        prefix + ".attention.context", Category::Attention, "MatMul", layer,
+        matmul_ns(q * static_cast<double>(heads), kv, static_cast<double>(head_dim)),
+        {tensor("probs", {1, heads, q_len, kv_len}), tensor("value", {1, heads, kv_len, head_dim})},
+        {tensor("context", {1, heads, q_len, head_dim})});
+    b.op(prefix + ".attention.out_proj", Category::Attention, "MatMul", layer, matmul_ns(q, hd, hd),
+         {tensor("context", hidden)}, {tensor("attn_out", hidden)});
+    b.op(prefix + ".post_attention_layernorm", Category::Normalization, "LayerNormalization", layer,
+         1'500.0 + q * hd / 32.0, {tensor("attn_out", hidden)}, {tensor("normed", hidden)});
     b.op(prefix + ".mlp.up_proj", Category::Mlp, "MatMul", layer,
          matmul_ns(q, hd, static_cast<double>(ffn)), {tensor("normed", hidden)},
          {tensor("up", {1, q_len, ffn})});
@@ -133,13 +133,15 @@ void emit_step(const SyntheticConfig& cfg, Prng& rng, std::vector<TraceEvent>& o
   b.op("final_layernorm", Category::Normalization, "LayerNormalization", std::nullopt,
        1'500.0 + q * hd / 32.0, {tensor("hidden_states", hidden)}, {tensor("normed", hidden)});
   b.op("lm_head", Category::Output, "MatMul", std::nullopt,
-       matmul_ns(1.0, hd, static_cast<double>(cfg.vocab_size)),
-       {tensor("normed", {1, 1, h})}, {tensor("logits", {1, 1, cfg.vocab_size})});
+       matmul_ns(1.0, hd, static_cast<double>(cfg.vocab_size)), {tensor("normed", {1, 1, h})},
+       {tensor("logits", {1, 1, cfg.vocab_size})});
 }
 
 }  // namespace
 
-int synthetic_events_per_step(const SyntheticConfig& config) { return 3 + config.layers * 10; }
+int synthetic_events_per_step(const SyntheticConfig& config) {
+  return 3 + config.layers * 10;
+}
 
 TraceMetadata synthetic_metadata(const SyntheticConfig& config) {
   TraceMetadata m;
@@ -206,10 +208,9 @@ void SyntheticAdapter::run(Collector& collector, const std::atomic<bool>& stop) 
   collector.set_capturing(true);
   const auto events = generate_synthetic(config_);
   const auto per_step = static_cast<std::size_t>(synthetic_events_per_step(config_));
-  const auto delay =
-      config_.steps_per_second > 0
-          ? std::chrono::duration<double>(1.0 / config_.steps_per_second)
-          : std::chrono::duration<double>(0);
+  const auto delay = config_.steps_per_second > 0
+                         ? std::chrono::duration<double>(1.0 / config_.steps_per_second)
+                         : std::chrono::duration<double>(0);
   // run_start + prefill step, then one decode step per tick.
   std::size_t index = 0;
   std::size_t batch = 1 + per_step;
