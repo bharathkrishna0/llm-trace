@@ -37,8 +37,10 @@ add_library(llm_trace_core
   src/core/collector.cpp
   src/core/synthetic.cpp
   src/core/trace_session.cpp
-  src/core/trace_io.cpp)
+  src/core/trace_io.cpp
+  src/adapters/onnx_profile_adapter.cpp)
 target_include_directories(llm_trace_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(llm_trace_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 find_package(Threads REQUIRED)
 target_link_libraries(llm_trace_core PUBLIC Threads::Threads)
 # nlohmann_json is linked further down, after FetchContent makes it available.
@@ -89,4 +91,18 @@ if(LLM_TRACE_BUILD_TESTS)
     DOWNLOAD_EXTRACT_TIMESTAMP ON)
   FetchContent_MakeAvailable(Catch2)
   add_subdirectory(tests)
+endif()
+
+# Optional: the ONNX Runtime sample that writes a real profile and measures profiling
+# overhead. Needs an unpacked ONNX Runtime release, e.g.
+#   cmake --preset release -DLLM_TRACE_BUILD_ORT_RUNNER=ON -DONNXRUNTIME_ROOT=~/deps/onnxruntime-linux-x64-1.20.1
+option(LLM_TRACE_BUILD_ORT_RUNNER "Build examples/onnx/onnx_profile_runner" OFF)
+if(LLM_TRACE_BUILD_ORT_RUNNER)
+  set(ONNXRUNTIME_ROOT "" CACHE PATH "Unpacked ONNX Runtime release directory")
+  find_path(ONNXRUNTIME_INCLUDE_DIR onnxruntime_cxx_api.h PATHS ${ONNXRUNTIME_ROOT}/include NO_DEFAULT_PATH REQUIRED)
+  find_library(ONNXRUNTIME_LIBRARY onnxruntime PATHS ${ONNXRUNTIME_ROOT}/lib NO_DEFAULT_PATH REQUIRED)
+  add_executable(onnx_profile_runner examples/onnx/onnx_profile_runner.cpp)
+  target_include_directories(onnx_profile_runner PRIVATE ${ONNXRUNTIME_INCLUDE_DIR})
+  target_link_libraries(onnx_profile_runner PRIVATE ${ONNXRUNTIME_LIBRARY})
+  set_target_properties(onnx_profile_runner PROPERTIES BUILD_RPATH ${ONNXRUNTIME_ROOT}/lib)
 endif()

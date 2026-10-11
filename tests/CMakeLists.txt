@@ -9,6 +9,7 @@ add_executable(llm_trace_tests
   unit/test_synthetic.cpp
   unit/test_tui.cpp
   unit/test_trace_io.cpp
+  unit/test_onnx_profile.cpp
   ${CMAKE_SOURCE_DIR}/src/cli.cpp)
 target_include_directories(llm_trace_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(llm_trace_tests PRIVATE llm_trace_tui Catch2::Catch2WithMain)
@@ -44,3 +45,6 @@ set_tests_properties(cli_open_malformed PROPERTIES WILL_FAIL TRUE)
 add_test(NAME cli_open_missing
   COMMAND llm-trace --open ${CMAKE_CURRENT_BINARY_DIR}/does-not-exist.jsonl --print-frame 80x20)
 set_tests_properties(cli_open_missing PROPERTIES WILL_FAIL TRUE)
+add_test(NAME cli_open_onnx_profile
+  COMMAND llm-trace --open ${CMAKE_SOURCE_DIR}/tests/fixtures/onnx_profiles/tiny_transformer_ort-1.20.1.json --no-color --ascii --print-frame 120x30)
+set_tests_properties(cli_open_onnx_profile PROPERTIES PASS_REGULAR_EXPRESSION "ONNX")
