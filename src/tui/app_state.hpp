@@ -13,7 +13,7 @@
 #include "tui/theme.hpp"
 
 namespace ftxui {
-class Event;
+struct Event;
 }
 
 namespace llm_trace::tui {
