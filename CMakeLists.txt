@@ -66,6 +66,10 @@ llm_trace_set_warnings(llm_trace_tui)
 add_executable(llm-trace src/main.cpp src/cli.cpp)
 target_include_directories(llm-trace PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(llm-trace PRIVATE llm_trace_tui)
+if(MSVC)
+  # std::getenv is only read (NO_COLOR); silence C4996.
+  target_compile_definitions(llm-trace PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
 llm_trace_set_warnings(llm-trace)
 
 if(LLM_TRACE_BUILD_TESTS)
