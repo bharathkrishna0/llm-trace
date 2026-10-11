@@ -1,0 +1,15 @@
+/build/
+/out/
+/.cache/
+compile_commands.json
+CMakeUserPresets.json
+*.swp
+.vscode/
+.vs/
+__pycache__/
+*.pyc
+/traces/
+*.jsonl.tmp
+# ONNX Runtime profiles written by the sample runner (checked-in fixtures live in tests/fixtures)
+/onnxruntime_profile_*.json
+/tiny_*.json
