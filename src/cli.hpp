@@ -26,6 +26,10 @@ struct Options {
   std::optional<FrameSize> print_frame;
   std::optional<std::string> open;
   std::optional<std::string> output;
+  std::vector<std::string> compare;         // empty, or exactly two trace paths
+  std::optional<std::string> compare_json;  // "-" = stdout
+  bool compare_by_op = false;
+  std::size_t top = 20;
 };
 
 struct ParseResult {
