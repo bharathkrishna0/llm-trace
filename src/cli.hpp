@@ -24,6 +24,8 @@ struct Options {
   double rate = 8.0;
   std::uint64_t seed = 42;
   std::optional<FrameSize> print_frame;
+  std::optional<std::string> open;
+  std::optional<std::string> output;
 };
 
 struct ParseResult {

@@ -1,0 +1,3 @@
+{"record":"metadata","schema_version":1,"source":"synthetic"}
+{"record":"event","sequence":1,"timestamp_ns":0,"duration_ns":10,"type":"operation","name":"ok"}
+{"record":"event","sequence":2,"timestamp_ns":10,"type":"operation","name":"broken",

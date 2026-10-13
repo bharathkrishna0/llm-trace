@@ -370,7 +370,7 @@ Elements status_strip(const Ctx& ctx) {
     line += dot + (narrow ? "buf " : "buffer ") + format_percent(fill);
   }
   line += dot + (narrow ? "ow " : "overwritten ") + format_count(overwritten);
-  Elements left{text(line)};
+  Elements left{text(line) | flex_shrink};  // the notice and status win when space is short
   if (m.warning_count)
     left.push_back(text(dot + std::string(ctx.theme.warn()) + " " + format_count(m.warning_count) +
                         " warnings") |
@@ -400,7 +400,9 @@ Element footer(const Ctx& ctx) {
     hints = "Tab panel  j/k move  / filter  m metrics  ? help  q quit";
   else
     hints =
-        "Tab panels  j/k move  Enter inspect  / filter  t sort  m metrics  p pause  ? help  q quit";
+        "Tab panels  j/k move  Enter inspect  / filter  t sort  m metrics  p pause  s save  ? help "
+        " "
+        "q quit";
   return text(hints) | ctx.theme.text_secondary();
 }
 
@@ -428,6 +430,7 @@ Element help_overlay(const Ctx& ctx) {
       key("t", "sort: source order, duration, name"),
       key("m", "toggle metrics panel"),
       key("p", "pause view (capture continues)"),
+      key("s", "save trace as JSONL (all retained events)"),
       key("Esc", "close filter, help or panel"),
       key("q", "quit"),
       text(""),

@@ -36,10 +36,12 @@ add_library(llm_trace_core
   src/core/format.cpp
   src/core/collector.cpp
   src/core/synthetic.cpp
-  src/core/trace_session.cpp)
+  src/core/trace_session.cpp
+  src/core/trace_io.cpp)
 target_include_directories(llm_trace_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 find_package(Threads REQUIRED)
 target_link_libraries(llm_trace_core PUBLIC Threads::Threads)
+# nlohmann_json is linked further down, after FetchContent makes it available.
 target_compile_definitions(llm_trace_core PUBLIC LLM_TRACE_VERSION="${PROJECT_VERSION}")
 llm_trace_set_warnings(llm_trace_core)
 
@@ -47,6 +49,13 @@ set(FTXUI_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(FTXUI_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(FTXUI_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(FTXUI_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(nlohmann_json
+  URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+  URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d
+  DOWNLOAD_EXTRACT_TIMESTAMP ON)
+FetchContent_MakeAvailable(nlohmann_json)
+target_link_libraries(llm_trace_core PRIVATE nlohmann_json::nlohmann_json)
+
 FetchContent_Declare(ftxui
   URL https://github.com/ArthurSonzogni/FTXUI/archive/refs/tags/v5.0.0.tar.gz
   URL_HASH SHA256=a2991cb222c944aee14397965d9f6b050245da849d8c5da7c72d112de2786b5b

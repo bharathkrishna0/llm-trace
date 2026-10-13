@@ -2,7 +2,7 @@
 
 A lightweight, local-first instrumentation, tracing, and replay platform for transformer inference, written in C++17 with a keyboard-driven terminal UI.
 
-> **Status:** early development. Available so far: the core event model, bounded ring-buffer storage, and a keyboard-driven TUI over a synthetic demo trace. Saving and replaying traces and the ONNX Runtime adapter are not implemented yet.
+> **Status:** early development. Available so far: the core event model, bounded ring-buffer storage, and a keyboard-driven TUI over a synthetic demo trace. saving traces to JSONL and replaying them offline. The ONNX Runtime adapter is not implemented yet.
 
 ## Build
 
@@ -37,6 +37,15 @@ ctest --preset msvc-release
 The demo trace is deterministic for a given `--seed`. Its timings come from a fixed cost model, **not from a real model**. The TUI marks it `[DEMO]` / `SYNTHETIC DEMO` at all times, and attention values and activation summaries are reported as "Not exposed by adapter".
 
 Keys: `j`/`k` or arrows move, `Tab` switches panel, `Enter` inspects, `/` filters (by name, category, op type or layer), `t` cycles the sort order, `m` shows metrics, `p` pauses the view while capture continues, `?` shows help, `q` quits. Layouts: two panes at 110+ columns, a compact two-pane view at 80–109, and a single pane below 80 columns.
+
+## Save and replay
+
+```bash
+./build/debug/llm-trace --demo --output demo.jsonl   # saves on exit; press s to save at any time
+./build/debug/llm-trace --open demo.jsonl            # offline replay, no model or adapter needed
+```
+
+Traces are versioned JSON Lines ([format](docs/architecture/event-schema.md)). Files are written to a temporary file and then renamed, so an interrupted save never truncates an existing trace. Imported files are validated against size and structure limits. A malformed file is rejected with its line number, e.g. `cannot load bad.jsonl: line 3: not valid JSON`. A replayed synthetic trace is still labelled `[DEMO]`. Nothing is uploaded: files are only read from and written to the paths you give.
 
 ## License
 
