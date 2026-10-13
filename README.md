@@ -2,7 +2,18 @@
 
 A lightweight, local-first instrumentation, tracing, and replay platform for transformer inference, written in C++17 with a keyboard-driven terminal UI.
 
-> **Status:** early development. Available so far: the core event model, bounded ring-buffer storage, and a keyboard-driven TUI over a synthetic demo trace. saving traces to JSONL and replaying them offline. It can also inspect ONNX Runtime profile files.
+[![Terminal demo: synthetic trace, filter, save, replay, ONNX Runtime profile](docs/media/demo.gif)](docs/media/demo.mp4)
+
+*Recorded with asciinema in a 120×32 terminal on a Linux VM (release build). Shown: the synthetic `[DEMO]` trace filling a 2,000-event buffer (overwrite counter visible), inspecting, filtering, saving, replaying the saved file, then opening a real ONNX Runtime 1.20.1 profile. [MP4](docs/media/demo.mp4)*
+
+> **Status:** MVP (0.1.0). It provides:
+> - a C++17 core: event model, bounded ring buffer, collector, aggregation
+> - a keyboard-driven TUI
+> - a deterministic synthetic demo
+> - JSONL save and offline replay
+> - an ONNX Runtime profile-file adapter
+>
+> There is no live capture from a real runtime yet. ONNX Runtime data is read from its profile file after the run.
 
 ## Build
 
@@ -36,7 +47,7 @@ ctest --preset msvc-release
 
 The demo trace is deterministic for a given `--seed`. Its timings come from a fixed cost model, **not from a real model**. The TUI marks it `[DEMO]` / `SYNTHETIC DEMO` at all times, and attention values and activation summaries are reported as "Not exposed by adapter".
 
-Keys: `j`/`k` or arrows move, `Tab` switches panel, `Enter` inspects, `/` filters (by name, category, op type or layer), `t` cycles the sort order, `m` shows metrics, `p` pauses the view while capture continues, `?` shows help, `q` quits. Layouts: two panes at 110+ columns, a compact two-pane view at 80–109, and a single pane below 80 columns.
+Keys: `j`/`k` or arrows move, `Tab` switches panel, `Enter` inspects, `/` filters (by name, category, op type or layer), `t` cycles the sort order, `m` shows metrics, `p` pauses the view while capture continues, `s` saves, `?` shows help, `q` quits. Layouts: two panes at 110+ columns, a compact two-pane view at 80–109, and a single pane below 80 columns.
 
 ## Save and replay
 
@@ -54,6 +65,31 @@ llm-trace --open onnxruntime_profile_2026-01-01_12-00-00.json
 ```
 
 This reads the profile ONNX Runtime writes when profiling is enabled (tested with 1.20.1). It shows per-kernel timing, op type, provider and input/output shapes. ONNX Runtime profiles contain no tensor values, so attention and activation data are shown as unavailable. Profiling itself slows inference down: about 6.8x on the tiny test model, where per-node overhead dominates. See [docs/adapters/onnxruntime.md](docs/adapters/onnxruntime.md) for the field mapping, how to produce a profile, and the overhead measurement.
+
+## What it does not do
+
+- It does not show attention weights, activation statistics or token positions for ONNX Runtime. The profile doesn't contain them, so the UI says "Not exposed by adapter" rather than guessing.
+- Synthetic demo timings are a cost model, not measurements.
+- There is no live hook into a runtime and no GPU-specific data. Only the CPU execution provider has been tested.
+- There is no network access and no telemetry. It reads and writes only the files you name.
+
+## Performance
+
+`llm_trace_bench` measures llm-trace's own costs (release build, 8 vCPU Xeon VM):
+- storing an event: about 0.19 µs
+- saving: about 6 µs per event
+- loading with full validation: about 11 µs per event
+- drawing a frame from 65,536 events: about 26 ms
+
+These are not end-to-end overheads on a real model. Method, full numbers and caveats are in [docs/benchmarks/](docs/benchmarks/).
+
+## Documentation
+
+- [Architecture overview](docs/architecture/overview.md) and [decision records](docs/architecture/decisions/)
+- [Trace file format](docs/architecture/event-schema.md)
+- [ONNX Runtime adapter](docs/adapters/onnxruntime.md)
+- [Benchmarks](docs/benchmarks/)
+- [Contributing](CONTRIBUTING.md)
 
 ## License
 
