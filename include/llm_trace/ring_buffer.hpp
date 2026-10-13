@@ -20,12 +20,17 @@ class RingBuffer {
   }
 
   // Returns true if an older element was overwritten.
-  bool push(T value) {
+  bool push(T value) { return push(std::move(value), nullptr); }
+
+  // Like push(), but when an element is overwritten it is moved into *evicted, so the
+  // caller can destroy it later (for example outside a lock).
+  bool push(T value, T* evicted) {
     if (slots_.size() < capacity_) {
       slots_.push_back(std::move(value));
       ++pushed_;
       return false;
     }
+    if (evicted) *evicted = std::move(slots_[head_]);
     slots_[head_] = std::move(value);
     head_ = (head_ + 1) % capacity_;
     ++pushed_;

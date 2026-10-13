@@ -5,6 +5,7 @@ add_executable(llm_trace_tests
   unit/test_cli.cpp
   unit/test_ring_buffer.cpp
   unit/test_collector.cpp
+  unit/test_event_filter.cpp
   unit/test_trace_session.cpp
   unit/test_synthetic.cpp
   unit/test_tui.cpp

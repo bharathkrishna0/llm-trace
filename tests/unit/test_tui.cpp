@@ -210,3 +210,32 @@ TEST_CASE("paused live view says capture continues") {
   c.apply(key(Action::TogglePause), LayoutMode::Wide, 10);
   CHECK(contains(render_plain(c, 140, 30), "CAPTURE CONTINUES"));
 }
+
+TEST_CASE("invalid filter keeps the last valid view and shows the error") {
+  Controller c;
+  c.set_session(demo_session());
+  c.apply(key(Action::OpenFilter), LayoutMode::Wide, 10);
+  for (char ch : std::string("layer:1"))
+    c.apply(key(Action::FilterInput, std::string(1, ch)), LayoutMode::Wide, 10);
+  const auto layer1 = c.view().size();
+  CHECK(layer1 > 0);
+  CHECK(c.state().filter_error.empty());
+  c.apply(key(Action::FilterInput, "x"), LayoutMode::Wide, 10);  // "layer:1x"
+  CHECK_FALSE(c.state().filter_error.empty());
+  CHECK(c.view().size() == layer1);
+  const auto frame = render_plain(c, 140, 40);
+  CHECK(contains(frame, "needs an integer"));
+  c.apply(key(Action::FilterBackspace), LayoutMode::Wide, 10);
+  CHECK(c.state().filter_error.empty());
+}
+
+TEST_CASE("notice replaces the footer hints instead of crowding the status strip") {
+  Controller c;
+  c.set_session(demo_session(4096));
+  c.apply(key(Action::MoveDown), LayoutMode::Wide, 10);
+  c.set_session(demo_session(8));
+  const auto frame = render_plain(c, 140, 40);
+  CHECK(contains(frame, "Selection overwritten"));
+  c.apply(key(Action::MoveDown), LayoutMode::Wide, 10);
+  CHECK(c.state().notice.empty());
+}

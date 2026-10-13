@@ -67,6 +67,7 @@ struct AppState {
   Mode mode = Mode::Normal;
   bool paused = false;
   std::string filter;
+  std::string filter_error;  // set while the typed filter does not parse
   SortMode sort = SortMode::Source;
   std::optional<std::uint64_t> selected_sequence;
   std::size_t selected_row = 0;
@@ -80,6 +81,8 @@ class Controller {
 
   // Replaces the displayed session and keeps the selection on the same event.
   void set_session(TraceSession session);
+  // Live mode: applies only what changed in the collector since the last update.
+  void apply_delta(CollectorDelta delta);
 
   // Applies an action. Returns false when the application should quit.
   bool apply(const KeyResult& key, LayoutMode layout, std::size_t page_rows);
@@ -98,6 +101,7 @@ class Controller {
   DisplayOptions display_;
   TraceSession session_;
   std::vector<std::size_t> view_;
+  EventFilter active_filter_;  // last filter that parsed; used while the input is invalid
   AppState state_;
 };
 

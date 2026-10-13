@@ -18,27 +18,36 @@ cmake --preset release && cmake --build --preset release --target llm_trace_benc
 - **Timing**: each case runs 7 times. The median wall-clock time (`steady_clock`) is divided by the number of events. There are no warm-up exclusions beyond the median.
 - **Machine**: Linux VM, 8 vCPU Intel Xeon Platinum 8559C, GCC 11, `-O3` (CMake Release).
 
-## Results (2026-10-11)
+## Results (2026-10-11, M6)
 
-| Case | Per event | Throughput |
+`main` (M5) and this branch were built in Release and run alternately on the same VM, twice each (main, M6, main, M6). The table shows both runs. Differences under about 10 % are within run-to-run noise on this VM.
+
+| Case | main (M5) | M6 |
 |---|---|---|
-| `RingBuffer::push` (copy, capacity 65,536) | 168 ns | 5.9 M events/s |
-| `Collector::submit`, 1 thread | 192 ns | 5.2 M events/s |
-| `Collector::submit`, 4 threads contending (total) | 1,184 ns | 0.84 M events/s |
-| `write_jsonl` to memory | 5.96 µs | 168 k events/s |
-| `read_jsonl` from memory (all validation on) | 11.1 µs | 90 k events/s |
-| ONNX Runtime profile parse (fixture) | 10.0 µs | 100 k events/s |
+| `RingBuffer::push` (copy, capacity 65,536) | 179 / 190 ns | 197 / 197 ns |
+| `Collector::submit`, 1 thread | 203 / 207 ns | 236 / 218 ns |
+| `Collector::submit`, 4 threads contending (total, per event) | 1,290 / 1,284 ns | 861 / 854 ns |
+| `Collector::submit_batch` (64 per call), 4 threads (total, per event) | n/a | 742 / 639 ns |
+| `write_jsonl` to memory | 6.57 / 6.09 µs | 6.18 / 6.18 µs |
+| `read_jsonl` from memory (all validation on) | 12.1 / 11.0 µs | 11.2 / 11.4 µs |
+| ONNX Runtime profile parse (fixture) | 11.3 / 9.9 µs | 10.0 / 10.0 µs |
 
-| Case | Per frame |
-|---|---|
-| Render a 160×45 frame, 10,000 events | 4.2 ms |
-| Render a 160×45 frame, 65,536 events (full default buffer) | 26.2 ms |
+| Case | main (M5) | M6 |
+|---|---|---|
+| Open + render one 160×45 replay frame, 10,000 events | 4.65 / 4.30 ms | 4.47 / 4.43 ms |
+| Open + render one 160×45 replay frame, 65,536 events | 29.1 / 27.4 ms | 28.3 / 28.4 ms |
+| Live refresh, full 65,536 buffer + 1,000 new events: snapshot + new session (the M5 path) | — | 30.5 / 34.5 ms |
+| Live refresh, same workload: `delta_since` + `TraceSession::apply` (the M6 path) | — | 2.99 / 2.95 ms |
+
+The two live-refresh rows run in the same M6 binary, so they compare the old and new refresh paths on identical data. The M5 binary has no such case.
 
 Memory: `sizeof(TraceEvent)` is 448 bytes, plus heap for names and tensor shapes. A saved event is about 503 bytes of JSONL.
 
 ## What this means, and what it does not
 
 - Storing an event costs about 0.2 µs, mostly the copy of its strings and tensors. That is small next to a transformer kernel lasting microseconds to milliseconds. However, it is **not** a measured end-to-end overhead on a real model, because live runtime capture is not implemented yet.
-- The single `Collector` mutex is the bottleneck under contention: 4 threads together are about 6× slower per event than 1 thread. This is fine for the current single-producer demo. A lock-free queue is the planned fix if a multi-threaded runtime adapter needs it (ADR 0002).
-- Frame time grows with the number of retained events, because each frame rebuilds the filtered and sorted view. At 65k events it is about 26 ms, so redraws in a full buffer are visibly slower. Caching the view between frames is a known improvement.
+- **Contention (M6).** With 4 threads, the per-event cost dropped from about 1.29 µs to about 0.86 µs (1.5×). The gain comes from moving the overwritten event out of the ring and destroying it after the lock is released. `submit_batch` takes the lock once per batch and reaches about 0.64–0.74 µs. 4 threads are still slower per event than 1 thread: there is still one mutex. A lock-free queue remains deferred (ADR 0002).
+- **Single-thread cost went up slightly** (about 205 → 225 ns per submit, ring push about 185 → 197 ns). This is the extra move into the "evicted" slot. It is close to the noise level, but it shows up in both runs, so it is reported.
+- **Live refresh (M6).** In M5, every refresh in a live view copied the whole buffer and rebuilt the session, about 30–35 ms with a full buffer. Now the viewer asks the collector only for events newer than the last one it saw (`delta_since`). It drops overwritten events from the front and appends the new ones. The same refresh takes about 3 ms (about 10×). Aggregates are still recomputed over all retained events, which is most of the remaining time.
+- **Replay frame.** The "open + render" case builds a session from a loaded trace and then draws one frame. It costs the same as before (about 28 ms at 65k events). In the interactive TUI this happens once when a file is opened. Moving the selection or redrawing does not rebuild the view; filtering and sorting re-run the query once per key press.
 - Saving and loading are much slower than capture (JSON formatting and validation). They are user-triggered, never on the capture path.

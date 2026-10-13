@@ -42,8 +42,20 @@ void Controller::set_session(TraceSession session) {
   rebuild_view();
 }
 
+void Controller::apply_delta(CollectorDelta delta) {
+  session_.apply(std::move(delta));
+  rebuild_view();
+}
+
 void Controller::rebuild_view() {
-  view_ = session_.query(state_.filter, state_.sort);
+  EventFilter parsed = EventFilter::parse(state_.filter);
+  if (parsed.valid()) {
+    active_filter_ = std::move(parsed);
+    state_.filter_error.clear();
+  } else {
+    state_.filter_error = parsed.error();  // keep showing the last valid result
+  }
+  view_ = session_.query(active_filter_, state_.sort);
   if (view_.empty()) {
     state_.selected_row = 0;
     state_.scroll_top = 0;
@@ -76,8 +88,7 @@ void Controller::rebuild_view() {
   }
   state_.selected_row = overwritten ? best : 0;
   state_.selected_sequence = events[view_[state_.selected_row]].sequence;
-  if (overwritten)
-    state_.notice = "Selected event was overwritten; moved to the nearest retained event";
+  if (overwritten) state_.notice = "Selection overwritten; moved to the nearest retained event";
 }
 
 void Controller::select_row(std::size_t row, std::size_t page_rows) {

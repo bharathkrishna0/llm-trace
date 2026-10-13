@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <limits>
 
+#include "llm_trace/collector.hpp"
 #include "llm_trace/trace_session.hpp"
 
 using namespace llm_trace;
@@ -152,4 +153,39 @@ TEST_CASE("enum string round-trips") {
   CHECK(element_count_of({-1, 4}) == 0);
   CHECK(dtype_size_bytes("float16") == std::optional<std::uint64_t>{2});
   CHECK_FALSE(dtype_size_bytes("string"));
+}
+
+TEST_CASE("incremental apply matches a full rebuild") {
+  Collector collector(16);
+  TraceSession live;
+  std::uint64_t next = 0;
+  for (int round = 0; round < 5; ++round) {
+    for (int i = 0; i < 7; ++i) {
+      const int k = round * 7 + i;
+      collector.submit(
+          op(0, "op" + std::to_string(k % 5), k % 2 ? Category::Mlp : Category::Attention,
+             static_cast<std::uint64_t>(k) * 10, static_cast<std::uint64_t>(k + 1), k % 3));
+    }
+    auto delta = collector.delta_since(next);
+    next = delta.first_retained_sequence + delta.stats.retained;
+    live.apply(std::move(delta));
+
+    auto snap = collector.snapshot();
+    const TraceSession full(snap.metadata, std::move(snap.events), snap.stats);
+    REQUIRE(live.events().size() == full.events().size());
+    CHECK(live.events().front().sequence == full.events().front().sequence);
+    CHECK(live.metrics().summed_operation_ns == full.metrics().summed_operation_ns);
+    CHECK(live.metrics().by_name.size() == full.metrics().by_name.size());
+    CHECK(live.metrics().by_name.front().key == full.metrics().by_name.front().key);
+    CHECK(live.query("layer:1", SortMode::DurationDesc) ==
+          full.query("layer:1", SortMode::DurationDesc));
+    CHECK(live.find_sequence(full.events().back().sequence) == full.events().size() - 1);
+  }
+}
+
+TEST_CASE("structured query uses the shared filter") {
+  const auto s = sample_session();
+  CHECK(s.query("cat:attention", SortMode::Source).size() == 2);
+  CHECK(s.query("dur:missing type:operation", SortMode::Source).size() == 1);
+  CHECK(s.query("layer:bogus", SortMode::Source).empty());
 }

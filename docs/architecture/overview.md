@@ -15,8 +15,8 @@
 |---|---|---|
 | `event.hpp` | `TraceEvent`, `TensorMetadata`, `AdapterCapabilities`, `TraceMetadata`. Optional fields use `std::optional`: absent means unknown, zero is a real value | know about any runtime |
 | `RingBuffer<T>` | fixed capacity, set at construction; overwrites the oldest event and counts overwrites | grow, or allocate after construction |
-| `Collector` | thread-safe `submit()` (one mutex), validation, rejection and overwrite counters, `snapshot()` | render or do I/O |
-| `TraceSession` | an immutable list of events plus queries: filter, sort, per-op/per-category aggregates | mutate events |
+| `Collector` | thread-safe `submit()` / `submit_batch()` (one mutex; validation and destruction of overwritten events happen outside it), rejection and overwrite counters, `snapshot()`, incremental `delta_since(sequence)` | render or do I/O |
+| `TraceSession` | a list of events plus queries: filter (`EventFilter`), sort, per-op/per-category aggregates; `apply(delta)` drops overwritten events and appends new ones for live views | mutate events |
 | `SyntheticGenerator` | deterministic, seeded demo trace from a fixed cost model, labelled `synthetic` | claim to measure anything |
 | `OnnxProfileAdapter` | maps an ONNX Runtime profile file to events; declares its capabilities | link ONNX Runtime (it parses the file only) |
 | `trace_io` | versioned JSONL write (atomic) and bounded read; `load_trace` detects the format | trust input |
