@@ -9,6 +9,9 @@
 #include <ostream>
 #include <system_error>
 
+#include "core/json_depth.hpp"
+#include "llm_trace/onnx_profile_adapter.hpp"
+
 namespace llm_trace {
 
 namespace {
@@ -259,33 +262,6 @@ struct Reader {
   }
 };
 
-// Nesting depth check before parsing, so a hostile line cannot build a deep tree.
-bool depth_ok(const std::string& text) {
-  int depth = 0;
-  bool in_string = false;
-  bool escaped = false;
-  for (const char ch : text) {
-    if (in_string) {
-      if (escaped) {
-        escaped = false;
-      } else if (ch == '\\') {
-        escaped = true;
-      } else if (ch == '"') {
-        in_string = false;
-      }
-      continue;
-    }
-    if (ch == '"') {
-      in_string = true;
-    } else if (ch == '{' || ch == '[') {
-      if (++depth > kMaxJsonDepth) return false;
-    } else if (ch == '}' || ch == ']') {
-      --depth;
-    }
-  }
-  return true;
-}
-
 // Reads one line without letting it grow past `max_bytes`. Returns false at EOF.
 bool read_bounded_line(std::istream& in, std::string& out, std::size_t max_bytes, bool& too_long) {
   out.clear();
@@ -426,7 +402,8 @@ LoadedTrace read_jsonl(std::istream& in, const ReadLimits& limits) {
       throw TraceIoError("record exceeds " + std::to_string(limits.max_line_bytes) + " bytes",
                          line);
     if (is_blank(text)) continue;
-    if (!depth_ok(text)) throw TraceIoError("JSON nesting is too deep", line);
+    if (!detail::json_depth_within(text, kMaxJsonDepth))
+      throw TraceIoError("JSON nesting is too deep", line);
     const json j = json::parse(text, nullptr, /*allow_exceptions=*/false);
     if (j.is_discarded()) throw TraceIoError("not valid JSON", line);
     if (!j.is_object()) throw TraceIoError("record must be a JSON object", line);
@@ -496,9 +473,7 @@ LoadedTrace load_trace(const std::string& path, const ReadLimits& limits) {
       return t;
     }
     case TraceFormat::OnnxProfile:
-      throw TraceIoError(path +
-                         " looks like an ONNX Runtime profile; profile import is not "
-                         "implemented yet");
+      return OnnxProfileAdapter().load(path, limits);
     case TraceFormat::Unknown:
       break;
   }

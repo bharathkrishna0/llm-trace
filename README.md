@@ -2,7 +2,7 @@
 
 A lightweight, local-first instrumentation, tracing, and replay platform for transformer inference, written in C++17 with a keyboard-driven terminal UI.
 
-> **Status:** early development. Available so far: the core event model, bounded ring-buffer storage, and a keyboard-driven TUI over a synthetic demo trace. saving traces to JSONL and replaying them offline. The ONNX Runtime adapter is not implemented yet.
+> **Status:** early development. Available so far: the core event model, bounded ring-buffer storage, and a keyboard-driven TUI over a synthetic demo trace. saving traces to JSONL and replaying them offline. It can also inspect ONNX Runtime profile files.
 
 ## Build
 
@@ -46,6 +46,14 @@ Keys: `j`/`k` or arrows move, `Tab` switches panel, `Enter` inspects, `/` filter
 ```
 
 Traces are versioned JSON Lines ([format](docs/architecture/event-schema.md)). Files are written to a temporary file and then renamed, so an interrupted save never truncates an existing trace. Imported files are validated against size and structure limits. A malformed file is rejected with its line number, e.g. `cannot load bad.jsonl: line 3: not valid JSON`. A replayed synthetic trace is still labelled `[DEMO]`. Nothing is uploaded: files are only read from and written to the paths you give.
+
+## ONNX Runtime profiles
+
+```bash
+llm-trace --open onnxruntime_profile_2026-01-01_12-00-00.json
+```
+
+This reads the profile ONNX Runtime writes when profiling is enabled (tested with 1.20.1). It shows per-kernel timing, op type, provider and input/output shapes. ONNX Runtime profiles contain no tensor values, so attention and activation data are shown as unavailable. Profiling itself slows inference down: about 6.8x on the tiny test model, where per-node overhead dominates. See [docs/adapters/onnxruntime.md](docs/adapters/onnxruntime.md) for the field mapping, how to produce a profile, and the overhead measurement.
 
 ## License
 

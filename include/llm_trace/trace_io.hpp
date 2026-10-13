@@ -23,6 +23,9 @@ struct ReadLimits {
   std::size_t max_tensors_per_event = 64;
   std::size_t max_shape_rank = 16;
   std::size_t max_attributes = 64;
+  // ONNX Runtime profiles are one JSON document, parsed in memory, so they get a
+  // tighter size limit than line-by-line JSONL.
+  std::uint64_t max_profile_bytes = 256ull << 20;  // 256 MiB
 };
 
 struct LoadedTrace {
