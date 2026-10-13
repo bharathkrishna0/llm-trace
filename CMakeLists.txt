@@ -37,6 +37,7 @@ add_library(llm_trace_core
   src/core/format.cpp
   src/core/collector.cpp
   src/core/synthetic.cpp
+  src/core/event_filter.cpp
   src/core/trace_session.cpp
   src/core/trace_io.cpp
   src/adapters/onnx_profile_adapter.cpp)

@@ -83,3 +83,56 @@ TEST_CASE("collector is safe under concurrent submission") {
   for (std::size_t i = 1; i < snap.events.size(); ++i)
     CHECK(snap.events[i].sequence == snap.events[i - 1].sequence + 1);
 }
+
+TEST_CASE("collector delta returns only new events and the retained window") {
+  Collector collector(4);
+  for (int i = 0; i < 3; ++i) collector.submit(op("a" + std::to_string(i), i * 10u, 1));
+  auto d = collector.delta_since(0);
+  CHECK(d.events.size() == 3);
+  CHECK(d.first_retained_sequence == 0);
+  const std::uint64_t next = d.first_retained_sequence + d.stats.retained;
+  CHECK(next == 3);
+  CHECK(collector.delta_since(next).events.empty());
+
+  for (int i = 3; i < 10; ++i) collector.submit(op("a" + std::to_string(i), i * 10u, 1));
+  d = collector.delta_since(next);  // seq 3..5 were overwritten
+  CHECK(d.first_retained_sequence == 6);
+  REQUIRE(d.events.size() == 4);
+  CHECK(d.events.front().sequence == 6);
+  CHECK(d.events.back().sequence == 9);
+  CHECK(d.metadata.overwritten_events == 6);
+}
+
+TEST_CASE("collector submit_batch applies the same rules as submit") {
+  Collector collector(4);
+  std::vector<TraceEvent> batch;
+  for (int i = 0; i < 6; ++i) batch.push_back(op("b" + std::to_string(i), i * 10u, 1));
+  batch[2].name.clear();  // invalid
+  CHECK(collector.submit_batch(std::move(batch)) == 5);
+  const auto snap = collector.snapshot();
+  CHECK(snap.stats.accepted == 5);
+  CHECK(snap.stats.rejected == 1);
+  CHECK(snap.stats.overwritten == 1);
+  REQUIRE(snap.events.size() == 4);
+  CHECK(snap.events.front().sequence == 1);
+  CHECK(snap.events.back().sequence == 4);
+  CHECK(snap.events.back().name == "b5");
+}
+
+TEST_CASE("collector submit_batch is safe under concurrent use") {
+  Collector collector(1 << 12);
+  std::vector<std::thread> pool;
+  for (int t = 0; t < 4; ++t)
+    pool.emplace_back([&collector, t] {
+      for (int b = 0; b < 50; ++b) {
+        std::vector<TraceEvent> batch;
+        for (int i = 0; i < 10; ++i) batch.push_back(op("t" + std::to_string(t), 0, 1));
+        collector.submit_batch(std::move(batch));
+      }
+    });
+  for (auto& th : pool) th.join();
+  const auto snap = collector.snapshot();
+  CHECK(snap.stats.accepted == 2000);
+  REQUIRE(snap.events.size() == 2000);
+  for (std::size_t i = 0; i < snap.events.size(); ++i) CHECK(snap.events[i].sequence == i);
+}

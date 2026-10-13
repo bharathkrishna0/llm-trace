@@ -134,8 +134,12 @@ Element operation_list(const Ctx& ctx, int pane_width) {
   if (focused) title = title | ctx.theme.accent();
   rows.push_back(title);
   if (st.mode == Mode::Filter || !st.filter.empty()) {
-    rows.push_back(hbox(
-        {text("/ ") | ctx.theme.accent(), text(st.filter + (st.mode == Mode::Filter ? "_" : ""))}));
+    Elements line{text("/ ") | ctx.theme.accent(),
+                  text(st.filter + (st.mode == Mode::Filter ? "_" : ""))};
+    if (!st.filter_error.empty())
+      line.push_back(text("  " + std::string(ctx.theme.warn()) + " " + st.filter_error) |
+                     ctx.theme.warning() | flex_shrink);
+    rows.push_back(hbox(std::move(line)));
   }
   const auto& view = ctx.c.view();
   if (view.empty()) {
@@ -370,27 +374,27 @@ Elements status_strip(const Ctx& ctx) {
     line += dot + (narrow ? "buf " : "buffer ") + format_percent(fill);
   }
   line += dot + (narrow ? "ow " : "overwritten ") + format_count(overwritten);
-  Elements left{text(line) | flex_shrink};  // the notice and status win when space is short
+  Elements left{text(line) | flex_shrink};  // the live/paused status wins when space is short
   if (m.warning_count)
     left.push_back(text(dot + std::string(ctx.theme.warn()) + " " + format_count(m.warning_count) +
                         " warnings") |
                    ctx.theme.warning());
   Element status =
       text(view_status(ctx)) | (ctx.c.state().paused ? ctx.theme.warning() : ctx.theme.success());
-  const std::string& notice = ctx.c.state().notice;
-  if (narrow) {
-    Elements out{hbox(std::move(left)), status};
-    if (!notice.empty()) out.push_back(text(notice) | ctx.theme.warning());
-    return out;
-  }
+  if (narrow) return {hbox(std::move(left)), status};
   left.push_back(filler());
-  if (!notice.empty()) left.push_back(text(notice + "  ") | ctx.theme.warning());
+  left.push_back(text("  "));
   left.push_back(status);
   return {hbox(std::move(left))};
 }
 
 Element footer(const Ctx& ctx) {
   const auto mode = ctx.c.state().mode;
+  // One-shot notices (save result, overwritten selection) replace the key hints until
+  // the next key press, so they never crowd the metrics strip.
+  const std::string& notice = ctx.c.state().notice;
+  if (!notice.empty() && mode == Mode::Normal)
+    return text(std::string(ctx.theme.warn()) + " " + notice) | ctx.theme.warning();
   std::string hints;
   if (mode == Mode::Filter)
     hints = "type to filter  Enter apply  Backspace delete  Esc clear";
@@ -426,7 +430,7 @@ Element help_overlay(const Ctx& ctx) {
       key("g / G", "first / last event"),
       key("Tab / Shift+Tab", "switch panel"),
       key("Enter", "inspect selected operation"),
-      key("/", "filter by name, category, op type or layer"),
+      key("/", "filter: text  layer:3  op:MatMul  cat:attention  dur>50us"),
       key("t", "sort: source order, duration, name"),
       key("m", "toggle metrics panel"),
       key("p", "pause view (capture continues)"),

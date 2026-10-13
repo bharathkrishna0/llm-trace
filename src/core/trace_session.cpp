@@ -1,7 +1,8 @@
 #include "llm_trace/trace_session.hpp"
 
 #include <algorithm>
-#include <map>
+#include <array>
+#include <iterator>
 #include <unordered_set>
 
 #include "llm_trace/metrics.hpp"
@@ -35,32 +36,63 @@ bool is_source_run_event(const TraceEvent& event) {
   return event.name == "model_run" || event.name == "decode.step" || event.name == "prefill";
 }
 
-std::vector<GroupStat> sorted_groups(const std::map<std::string, GroupStat>& groups) {
-  std::vector<GroupStat> out;
-  out.reserve(groups.size());
-  for (const auto& entry : groups) out.push_back(entry.second);
-  std::stable_sort(out.begin(), out.end(),
-                   [](const GroupStat& a, const GroupStat& b) { return a.total_ns > b.total_ns; });
-  return out;
+// Longest total first; ties by key so the order never depends on hashing.
+void sort_groups(std::vector<GroupStat>& groups) {
+  std::sort(groups.begin(), groups.end(), [](const GroupStat& a, const GroupStat& b) {
+    if (a.total_ns != b.total_ns) return a.total_ns > b.total_ns;
+    return a.key < b.key;
+  });
 }
+
+void add_to(GroupStat& group, std::uint64_t ns) {
+  ++group.count;
+  group.total_ns += ns;
+  group.max_ns = std::max(group.max_ns, ns);
+}
+
+constexpr std::size_t kCategoryCount = static_cast<std::size_t>(Category::Other) + 1;
 
 }  // namespace
 
 TraceSession::TraceSession(TraceMetadata metadata, std::vector<TraceEvent> events,
                            std::optional<CollectorStats> live_stats)
-    : metadata_(std::move(metadata)), events_(std::move(events)), live_stats_(live_stats) {
+    : metadata_(std::move(metadata)),
+      events_(std::make_move_iterator(events.begin()), std::make_move_iterator(events.end())),
+      live_stats_(live_stats) {
+  index_sequences();
+  compute_metrics();
+}
+
+void TraceSession::apply(CollectorDelta delta) {
+  metadata_ = std::move(delta.metadata);
+  live_stats_ = delta.stats;
+  while (!events_.empty() && events_.front().sequence < delta.first_retained_sequence)
+    events_.pop_front();
+  for (auto& e : delta.events)
+    if (events_.empty() || e.sequence > events_.back().sequence) events_.push_back(std::move(e));
+  index_sequences();
+  compute_metrics();
+}
+
+void TraceSession::index_sequences() {
+  sequences_sorted_ = true;
+  for (std::size_t i = 1; i < events_.size() && sequences_sorted_; ++i)
+    sequences_sorted_ = events_[i - 1].sequence < events_[i].sequence;
+  by_sequence_.clear();
+  if (sequences_sorted_) return;
   by_sequence_.reserve(events_.size());
   for (std::size_t i = 0; i < events_.size(); ++i) by_sequence_.emplace(events_[i].sequence, i);
-  compute_metrics();
 }
 
 void TraceSession::compute_metrics() {
   SessionMetrics m;
   m.event_count = events_.size();
-  std::map<std::string, GroupStat> categories;
-  std::map<std::string, GroupStat> names;
+  std::array<GroupStat, kCategoryCount> categories{};
+  std::unordered_map<std::string, std::size_t> name_index;
+  std::vector<GroupStat> names;
   std::vector<std::size_t> timed_ops;
   std::uint64_t source_run_total = 0;
+  std::uint64_t last_end = 0;
 
   for (std::size_t i = 0; i < events_.size(); ++i) {
     const auto& e = events_[i];
@@ -68,9 +100,11 @@ void TraceSession::compute_metrics() {
     if (e.type == EventType::Operation && !e.duration_ns) ++m.missing_duration_count;
 
     if (e.type == EventType::Operation || e.type == EventType::RunStart ||
-        e.type == EventType::RunEnd)
+        e.type == EventType::RunEnd) {
       m.first_timestamp_ns =
           m.first_timestamp_ns ? std::min(*m.first_timestamp_ns, e.timestamp_ns) : e.timestamp_ns;
+      last_end = std::max(last_end, e.timestamp_ns + e.duration_ns.value_or(0));
+    }
 
     if (e.type == EventType::Operation && e.category == Category::Session) {
       ++m.session_event_count;
@@ -86,29 +120,18 @@ void TraceSession::compute_metrics() {
     m.summed_operation_ns += *e.duration_ns;
     timed_ops.push_back(i);
 
-    auto& cat = categories[to_string(e.category)];
-    cat.key = to_string(e.category);
-    ++cat.count;
-    cat.total_ns += *e.duration_ns;
-    cat.max_ns = std::max(cat.max_ns, *e.duration_ns);
+    add_to(categories[static_cast<std::size_t>(e.category)], *e.duration_ns);
 
-    const std::string key = e.op_type ? *e.op_type : e.name;
-    auto& group = names[key];
-    group.key = key;
-    ++group.count;
-    group.total_ns += *e.duration_ns;
-    group.max_ns = std::max(group.max_ns, *e.duration_ns);
-  }
-
-  if (m.first_timestamp_ns) {
-    std::uint64_t last_end = *m.first_timestamp_ns;
-    for (const auto& e : events_) {
-      if (e.type == EventType::Operation || e.type == EventType::RunStart ||
-          e.type == EventType::RunEnd)
-        last_end = std::max(last_end, e.timestamp_ns + e.duration_ns.value_or(0));
+    const std::string& key = e.op_type ? *e.op_type : e.name;
+    auto it = name_index.find(key);
+    if (it == name_index.end()) {
+      it = name_index.emplace(key, names.size()).first;
+      names.push_back(GroupStat{key, 0, 0, 0});
     }
-    m.observed_span_ns = last_end - *m.first_timestamp_ns;
+    add_to(names[it->second], *e.duration_ns);
   }
+
+  if (m.first_timestamp_ns) m.observed_span_ns = last_end - *m.first_timestamp_ns;
 
   if (m.source_run_count > 0) m.source_run_total_ns = source_run_total;
 
@@ -121,32 +144,31 @@ void TraceSession::compute_metrics() {
                     });
   timed_ops.resize(top);
   m.top_operations = std::move(timed_ops);
-  m.by_category = sorted_groups(categories);
-  m.by_name = sorted_groups(names);
+  for (std::size_t c = 0; c < kCategoryCount; ++c) {
+    if (categories[c].count == 0) continue;
+    categories[c].key = to_string(static_cast<Category>(c));
+    m.by_category.push_back(std::move(categories[c]));
+  }
+  sort_groups(m.by_category);
+  sort_groups(names);
+  m.by_name = std::move(names);
   metrics_ = std::move(m);
 }
 
-bool TraceSession::matches(const TraceEvent& event, const std::string& lowered_filter) {
-  if (lowered_filter.empty()) return true;
-  auto contains = [&](const std::string& text) {
-    return to_lower(text).find(lowered_filter) != std::string::npos;
-  };
-  if (contains(event.name)) return true;
-  if (contains(to_string(event.category))) return true;
-  if (contains(to_string(event.type))) return true;
-  if (event.op_type && contains(*event.op_type)) return true;
-  if (event.layer_index && (std::to_string(*event.layer_index) == lowered_filter ||
-                            "layer " + std::to_string(*event.layer_index) == lowered_filter))
-    return true;
-  return false;
+std::vector<std::size_t> TraceSession::query(const std::string& filter, SortMode sort) const {
+  return query(EventFilter::parse(filter), sort);
 }
 
-std::vector<std::size_t> TraceSession::query(const std::string& filter, SortMode sort) const {
-  const std::string lowered = to_lower(filter);
+std::vector<std::size_t> TraceSession::query(const EventFilter& filter, SortMode sort) const {
   std::vector<std::size_t> out;
+  if (!filter.valid()) return out;
   out.reserve(events_.size());
-  for (std::size_t i = 0; i < events_.size(); ++i)
-    if (matches(events_[i], lowered)) out.push_back(i);
+  if (filter.empty()) {
+    for (std::size_t i = 0; i < events_.size(); ++i) out.push_back(i);
+  } else {
+    for (std::size_t i = 0; i < events_.size(); ++i)
+      if (filter.matches(events_[i])) out.push_back(i);
+  }
 
   switch (sort) {
     case SortMode::Source:
@@ -170,6 +192,13 @@ std::vector<std::size_t> TraceSession::query(const std::string& filter, SortMode
 }
 
 std::optional<std::size_t> TraceSession::find_sequence(std::uint64_t sequence) const {
+  if (sequences_sorted_) {
+    const auto it = std::lower_bound(
+        events_.begin(), events_.end(), sequence,
+        [](const TraceEvent& e, std::uint64_t value) { return e.sequence < value; });
+    if (it == events_.end() || it->sequence != sequence) return std::nullopt;
+    return static_cast<std::size_t>(it - events_.begin());
+  }
   auto it = by_sequence_.find(sequence);
   if (it == by_sequence_.end()) return std::nullopt;
   return it->second;

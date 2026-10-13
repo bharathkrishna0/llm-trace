@@ -124,12 +124,15 @@ int run_demo(const DemoOptions& options) {
 
   Controller controller(options.display);
   std::uint64_t shown_version = UINT64_MAX;
+  std::uint64_t next_sequence = 0;
   auto refresh = [&] {
     if (controller.state().paused) return;
     const auto version = collector.stats().version;
     if (version == shown_version) return;
     shown_version = version;
-    controller.set_session(session_from(collector));
+    CollectorDelta delta = collector.delta_since(next_sequence);
+    next_sequence = delta.first_retained_sequence + delta.stats.retained;
+    controller.apply_delta(std::move(delta));
   };
   refresh();
   const std::string save_path = options.output.value_or(default_output_path(collector.metadata()));

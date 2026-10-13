@@ -13,3 +13,5 @@ Status: accepted (M1)
 - Long runs keep only the most recent window, and the UI says so.
 - Saving writes only the retained events, and the metadata records how many were lost.
 - One mutex is simple and adequate at the measured rates (see `docs/benchmarks/`). A lock-free queue is deferred until a runtime needs it.
+
+**Update (M6).** The design still uses one mutex, with less work done while holding it. Validation happens before the lock. The overwritten event is moved out of the ring and destroyed after the lock is released. `submit_batch()` stores many events under a single lock acquisition. Viewers call `delta_since(sequence)`, which copies only the new events under the lock instead of the whole buffer. Sequences stay consecutive and every accepted event is pushed, so the retained window is always `[next - size, next)`.

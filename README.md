@@ -47,7 +47,24 @@ ctest --preset msvc-release
 
 The demo trace is deterministic for a given `--seed`. Its timings come from a fixed cost model, **not from a real model**. The TUI marks it `[DEMO]` / `SYNTHETIC DEMO` at all times, and attention values and activation summaries are reported as "Not exposed by adapter".
 
-Keys: `j`/`k` or arrows move, `Tab` switches panel, `Enter` inspects, `/` filters (by name, category, op type or layer), `t` cycles the sort order, `m` shows metrics, `p` pauses the view while capture continues, `s` saves, `?` shows help, `q` quits. Layouts: two panes at 110+ columns, a compact two-pane view at 80–109, and a single pane below 80 columns.
+Keys: `j`/`k` or arrows move, `Tab` switches panel, `Enter` inspects, `/` filters (see [Filtering](#filtering)), `t` cycles the sort order, `m` shows metrics, `p` pauses the view while capture continues, `s` saves, `?` shows help, `q` quits. Layouts: two panes at 110+ columns, a compact two-pane view at 80–109, and a single pane below 80 columns.
+
+### Filtering
+
+Press `/` and type terms separated by spaces; an event must match all of them. The view updates as you type. If a term does not parse, the list keeps the last valid result and the error is shown next to the filter.
+
+| Term | Matches |
+|---|---|
+| `matmul` | case-insensitive substring of name, category, event type or op type; a bare number such as `3` also matches layer 3 |
+| `"layer.0 attn"` | quotes keep spaces inside one term |
+| `name:qkv`, `op:MatMul`, `device:cpu` | case-insensitive substring of that field |
+| `cat:attention`, `type:warning` | exact category or event type |
+| `layer:3`, `layer:2..5`, `layer>=10`, `token:0`, `head<4` | integer comparisons (`:` `=` `<` `<=` `>` `>=`, `a..b` inclusive) |
+| `dur>50us`, `dur<=1.5ms`, `dur:10us..2ms` | duration with a unit: `ns`, `us`, `ms`, `s` |
+| `op:missing`, `dur:missing`, `layer:missing` | the event does not carry that field |
+| `-cat:session` | a leading `-` negates any term |
+
+An event that lacks a field never satisfies a comparison on it: `dur<1us` does not match events without a duration (use `dur:missing` for those). Unknown keys such as `lyer:3` are reported as errors rather than treated as text. At most 16 terms.
 
 ## Save and replay
 
@@ -76,10 +93,11 @@ This reads the profile ONNX Runtime writes when profiling is enabled (tested wit
 ## Performance
 
 `llm_trace_bench` measures llm-trace's own costs (release build, 8 vCPU Xeon VM):
-- storing an event: about 0.19 µs
+- storing an event: about 0.2 µs (about 0.86 µs per event with 4 threads contending, 0.64–0.74 µs using `submit_batch`)
 - saving: about 6 µs per event
 - loading with full validation: about 11 µs per event
-- drawing a frame from 65,536 events: about 26 ms
+- a live refresh with a full 65,536-event buffer: about 3 ms (it was about 30 ms before M6)
+- opening and drawing a 65,536-event replay: about 28 ms, once
 
 These are not end-to-end overheads on a real model. Method, full numbers and caveats are in [docs/benchmarks/](docs/benchmarks/).
 

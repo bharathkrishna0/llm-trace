@@ -20,7 +20,9 @@
 #include "llm_trace/ring_buffer.hpp"
 #include "llm_trace/synthetic.hpp"
 #include "llm_trace/trace_io.hpp"
+#include "llm_trace/trace_session.hpp"
 #include "tui/app.hpp"
+#include "tui/app_state.hpp"
 
 using namespace llm_trace;
 using Clock = std::chrono::steady_clock;
@@ -116,6 +118,35 @@ int main(int argc, char** argv) {
            n, "event");
   }
 
+  {
+    Collector c(65536, meta);
+    c.set_capturing(true);
+    const int threads = 4;
+    const std::size_t batch = 64;
+    report("collector submit_batch(64), 4 threads (total)",
+           median_seconds(reps,
+                          [&] {
+                            std::vector<std::thread> pool;
+                            for (int t = 0; t < threads; ++t)
+                              pool.emplace_back([&, t] {
+                                std::vector<TraceEvent> pending;
+                                pending.reserve(batch);
+                                for (std::size_t i = static_cast<std::size_t>(t); i < n;
+                                     i += threads) {
+                                  pending.push_back(events[i]);
+                                  if (pending.size() == batch) {
+                                    c.submit_batch(std::move(pending));
+                                    pending.clear();
+                                    pending.reserve(batch);
+                                  }
+                                }
+                                if (!pending.empty()) c.submit_batch(std::move(pending));
+                              });
+                            for (auto& th : pool) th.join();
+                          }),
+           n, "event");
+  }
+
   std::string jsonl;
   report("write_jsonl (to memory)",
          median_seconds(reps,
@@ -158,6 +189,37 @@ int main(int argc, char** argv) {
                 (std::string("render 160x45 frame, ") + std::to_string(t.events.size()) + " events")
                     .c_str(),
                 ft * 1e3);
+  }
+
+  // One live refresh with a full 65536-event buffer after 1000 new events: the M5 path
+  // (snapshot + new TraceSession) against the incremental delta path.
+  {
+    const std::size_t cap = 65536, batch = 1000;
+    Collector c(cap, meta);
+    c.set_capturing(true);
+    for (std::size_t i = 0; i < cap; ++i) c.submit(events[i % n]);
+    std::size_t k = cap;
+    auto add_batch = [&] {
+      for (std::size_t i = 0; i < batch; ++i) c.submit(events[k++ % n]);
+    };
+    tui::Controller full;
+    const double ft = median_seconds(reps, [&] {
+      add_batch();
+      auto snap = c.snapshot();
+      full.set_session(TraceSession(snap.metadata, std::move(snap.events), snap.stats));
+    });
+    tui::Controller live;
+    auto first = c.delta_since(0);
+    std::uint64_t next = first.first_retained_sequence + first.stats.retained;
+    live.apply_delta(std::move(first));
+    const double dt = median_seconds(reps, [&] {
+      add_batch();
+      auto delta = c.delta_since(next);
+      next = delta.first_retained_sequence + delta.stats.retained;
+      live.apply_delta(std::move(delta));
+    });
+    std::printf("%-44s %10.2f ms/refresh\n", "live refresh 65536+1000, full snapshot", ft * 1e3);
+    std::printf("%-44s %10.2f ms/refresh\n", "live refresh 65536+1000, delta", dt * 1e3);
   }
   return 0;
 }

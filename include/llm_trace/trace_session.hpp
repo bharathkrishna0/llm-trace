@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -12,6 +13,7 @@
 
 #include "llm_trace/collector.hpp"
 #include "llm_trace/event.hpp"
+#include "llm_trace/event_filter.hpp"
 
 namespace llm_trace {
 
@@ -55,13 +57,20 @@ class TraceSession {
                std::optional<CollectorStats> live_stats = std::nullopt);
 
   const TraceMetadata& metadata() const { return metadata_; }
-  const std::vector<TraceEvent>& events() const { return events_; }
+  // Oldest first. A deque so live updates can drop overwritten events from the front.
+  const std::deque<TraceEvent>& events() const { return events_; }
   const SessionMetrics& metrics() const { return metrics_; }
   const std::optional<CollectorStats>& live_stats() const { return live_stats_; }
   bool empty() const { return events_.empty(); }
 
-  // Case-insensitive substring match over name, category, op_type and layer index.
-  // Returns indices into events(); never mutates the stored events.
+  // Live update from a Collector: drops events older than
+  // delta.first_retained_sequence, appends the new ones and recomputes metrics. Costs
+  // O(retained) for the metrics pass but copies only the new events.
+  void apply(CollectorDelta delta);
+
+  // Returns indices into events() that match `filter` (see event_filter.hpp), sorted.
+  // An invalid filter matches nothing. Never mutates the stored events.
+  std::vector<std::size_t> query(const EventFilter& filter, SortMode sort) const;
   std::vector<std::size_t> query(const std::string& filter, SortMode sort) const;
 
   std::optional<std::size_t> find_sequence(std::uint64_t sequence) const;
@@ -69,15 +78,17 @@ class TraceSession {
   // Distinct warning/adapter_error messages plus metadata notes, in first-seen order.
   std::vector<std::string> warnings() const;
 
-  static bool matches(const TraceEvent& event, const std::string& lowered_filter);
-
  private:
+  void index_sequences();
   void compute_metrics();
 
   TraceMetadata metadata_;
-  std::vector<TraceEvent> events_;
+  std::deque<TraceEvent> events_;
   std::optional<CollectorStats> live_stats_;
   SessionMetrics metrics_;
+  // Sources normally emit strictly increasing sequences, so lookups binary-search
+  // events_. The map is built only for out-of-order input.
+  bool sequences_sorted_ = true;
   std::unordered_map<std::uint64_t, std::size_t> by_sequence_;
 };
 
