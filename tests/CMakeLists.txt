@@ -5,6 +5,7 @@ add_executable(llm_trace_tests
   unit/test_cli.cpp
   unit/test_ring_buffer.cpp
   unit/test_collector.cpp
+  unit/test_compare.cpp
   unit/test_event_filter.cpp
   unit/test_trace_session.cpp
   unit/test_synthetic.cpp
@@ -49,3 +50,18 @@ set_tests_properties(cli_open_missing PROPERTIES WILL_FAIL TRUE)
 add_test(NAME cli_open_onnx_profile
   COMMAND llm-trace --open ${CMAKE_SOURCE_DIR}/tests/fixtures/onnx_profiles/tiny_transformer_ort-1.20.1.json --no-color --ascii --print-frame 120x30)
 set_tests_properties(cli_open_onnx_profile PROPERTIES PASS_REGULAR_EXPRESSION "ONNX")
+
+# Compare two traces: a fixture against itself, the demo trace against the fixture, and JSON.
+add_test(NAME cli_compare_same
+  COMMAND llm-trace --compare ${CMAKE_SOURCE_DIR}/tests/fixtures/jsonl/synthetic_small.jsonl ${CMAKE_SOURCE_DIR}/tests/fixtures/jsonl/synthetic_small.jsonl --ascii)
+set_tests_properties(cli_compare_same PROPERTIES PASS_REGULAR_EXPRESSION "By category.*\\+0\\.0%.*Only in A: 0")
+add_test(NAME cli_compare_demo_vs_fixture
+  COMMAND llm-trace --compare ${CMAKE_SOURCE_DIR}/tests/fixtures/jsonl/synthetic_small.jsonl ${CMAKE_CURRENT_BINARY_DIR}/cli_demo.jsonl --compare-by op --ascii)
+set_tests_properties(cli_compare_demo_vs_fixture PROPERTIES DEPENDS cli_demo_output
+  PASS_REGULAR_EXPRESSION "synthetic demo data")
+add_test(NAME cli_compare_onnx_json
+  COMMAND llm-trace --compare ${CMAKE_SOURCE_DIR}/tests/fixtures/jsonl/synthetic_small.jsonl ${CMAKE_SOURCE_DIR}/tests/fixtures/onnx_profiles/tiny_transformer_ort-1.20.1.json --compare-json -)
+set_tests_properties(cli_compare_onnx_json PROPERTIES PASS_REGULAR_EXPRESSION "llm-trace-compare/1.*Different sources")
+add_test(NAME cli_compare_missing
+  COMMAND llm-trace --compare ${CMAKE_SOURCE_DIR}/tests/fixtures/jsonl/synthetic_small.jsonl ${CMAKE_CURRENT_BINARY_DIR}/does-not-exist.jsonl)
+set_tests_properties(cli_compare_missing PROPERTIES WILL_FAIL TRUE)

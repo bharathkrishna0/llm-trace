@@ -90,6 +90,15 @@ This reads the profile ONNX Runtime writes when profiling is enabled (tested wit
 - There is no live hook into a runtime and no GPU-specific data. Only the CPU execution provider has been tested.
 - There is no network access and no telemetry. It reads and writes only the files you name.
 
+## Comparing two traces
+
+```bash
+llm-trace --compare before.jsonl after.jsonl            # or two ONNX Runtime profiles
+llm-trace --compare a.json b.json --compare-by op --compare-json diff.json
+```
+
+The report shows the mean time per call for B against A, by category, by layer and by operation, plus ops that appear in only one trace. It warns when the traces differ in source, model, runtime or device, or when either trace lost events. It does not test significance. Details and a measured example: [docs/compare/](docs/compare/).
+
 ## Performance
 
 `llm_trace_bench` measures llm-trace's own costs (release build, 8 vCPU Xeon VM):
@@ -106,6 +115,7 @@ These are not end-to-end overheads on a real model. Method, full numbers and cav
 - [Architecture overview](docs/architecture/overview.md) and [decision records](docs/architecture/decisions/)
 - [Trace file format](docs/architecture/event-schema.md)
 - [ONNX Runtime adapter](docs/adapters/onnxruntime.md)
+- [Comparing traces](docs/compare/)
 - [Benchmarks](docs/benchmarks/)
 - [Contributing](CONTRIBUTING.md)
 

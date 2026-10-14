@@ -16,6 +16,7 @@
 | `event.hpp` | `TraceEvent`, `TensorMetadata`, `AdapterCapabilities`, `TraceMetadata`. Optional fields use `std::optional`: absent means unknown, zero is a real value | know about any runtime |
 | `RingBuffer<T>` | fixed capacity, set at construction; overwrites the oldest event and counts overwrites | grow, or allocate after construction |
 | `Collector` | thread-safe `submit()` / `submit_batch()` (one mutex; validation and destruction of overwritten events happen outside it), rejection and overwrite counters, `snapshot()`, incremental `delta_since(sequence)` | render or do I/O |
+| `compare.hpp` | `compare_traces(A, B)`: per-category, per-layer and per-op mean-per-call deltas, one-sided ops, mismatch warnings; text and JSON output | decide whether a change is significant |
 | `TraceSession` | a list of events plus queries: filter (`EventFilter`), sort, per-op/per-category aggregates; `apply(delta)` drops overwritten events and appends new ones for live views | mutate events |
 | `SyntheticGenerator` | deterministic, seeded demo trace from a fixed cost model, labelled `synthetic` | claim to measure anything |
 | `OnnxProfileAdapter` | maps an ONNX Runtime profile file to events; declares its capabilities | link ONNX Runtime (it parses the file only) |
