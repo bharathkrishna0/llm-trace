@@ -5,6 +5,7 @@ add_executable(llm_trace_tests
   unit/test_cli.cpp
   unit/test_ring_buffer.cpp
   unit/test_collector.cpp
+  unit/test_activation.cpp
   unit/test_anomaly.cpp
   unit/test_compare.cpp
   unit/test_event_filter.cpp
@@ -84,3 +85,7 @@ set_tests_properties(cli_check_bad_rules PROPERTIES WILL_FAIL TRUE)
 add_test(NAME cli_open_with_rules
   COMMAND llm-trace --open ${LT_ORT_FIXTURE} --rules ${CMAKE_SOURCE_DIR}/tests/fixtures/rules/slow_ops.json --no-color --ascii --print-frame 120x30)
 set_tests_properties(cli_open_with_rules PROPERTIES PASS_REGULAR_EXPRESSION " !/layers")
+
+add_test(NAME cli_open_activations
+  COMMAND llm-trace --open ${CMAKE_SOURCE_DIR}/tests/fixtures/jsonl/tiny_activations_ort-1.20.1.jsonl --no-color --ascii --print-frame 160x45)
+set_tests_properties(cli_open_activations PROPERTIES PASS_REGULAR_EXPRESSION "ACTIVATION SUMMARY")
