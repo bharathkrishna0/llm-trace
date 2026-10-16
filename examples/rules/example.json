@@ -1,0 +1,8 @@
+{
+  "rules": [
+    {"id": "slow-vs-p95", "kind": "p95_multiple", "factor": 3, "min_calls": 20, "min_us": 10},
+    {"id": "large-share", "kind": "share", "above": 0.25},
+    {"id": "slow-attention-matmul", "kind": "match", "filter": "op:MatMul dur>200us",
+     "scope": "cat:attention"}
+  ]
+}

@@ -15,6 +15,7 @@
 #include <thread>
 #include <vector>
 
+#include "llm_trace/anomaly.hpp"
 #include "llm_trace/collector.hpp"
 #include "llm_trace/onnx_profile_adapter.hpp"
 #include "llm_trace/ring_buffer.hpp"
@@ -219,7 +220,24 @@ int main(int argc, char** argv) {
       live.apply_delta(std::move(delta));
     });
     std::printf("%-44s %10.2f ms/refresh\n", "live refresh 65536+1000, full snapshot", ft * 1e3);
-    std::printf("%-44s %10.2f ms/refresh\n", "live refresh 65536+1000, delta", dt * 1e3);
+    tui::Controller bare({}, {});
+    auto bare_first = c.delta_since(0);
+    std::uint64_t bare_next = bare_first.first_retained_sequence + bare_first.stats.retained;
+    bare.apply_delta(std::move(bare_first));
+    const double nt = median_seconds(reps, [&] {
+      add_batch();
+      auto delta = c.delta_since(bare_next);
+      bare_next = delta.first_retained_sequence + delta.stats.retained;
+      bare.apply_delta(std::move(delta));
+    });
+    std::printf("%-44s %10.2f ms/refresh\n", "live refresh 65536+1000, delta, no rules", nt * 1e3);
+    std::printf("%-44s %10.2f ms/refresh\n", "live refresh 65536+1000, delta+rules", dt * 1e3);
+    const auto rules = default_rules();
+    const double et = median_seconds(reps, [&] {
+      const auto report = evaluate_rules(rules, live.session().events());
+      if (report.hits.size() == SIZE_MAX) std::abort();
+    });
+    std::printf("%-44s %10.2f ms/pass\n", "default rules over 65536 events", et * 1e3);
   }
   return 0;
 }

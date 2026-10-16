@@ -99,6 +99,15 @@ llm-trace --compare a.json b.json --compare-by op --compare-json diff.json
 
 The report shows the mean time per call for B against A, by category, by layer and by operation, plus ops that appear in only one trace. It warns when the traces differ in source, model, runtime or device, or when either trace lost events. It does not test significance. Details and a measured example: [docs/compare/](docs/compare/).
 
+## Heuristic anomaly rules
+
+```bash
+llm-trace --open trace.json                     # rows matching a rule show "!", n jumps to the next
+llm-trace --check trace.json --rules rules.json # exit 0 = nothing matched, 1 = matched, 2 = error
+```
+
+By default, a call is flagged when it takes longer than 3× the p95 of the same op with the same input shapes, or when one call takes more than 25% of summed op time. You can write your own rules in a JSON file, including `match` rules that use the filter syntax (`op:MatMul dur>200us`). Matches are labelled as heuristics, not measured findings. Details and limits: [docs/rules/](docs/rules/).
+
 ## Performance
 
 `llm_trace_bench` measures llm-trace's own costs (release build, 8 vCPU Xeon VM):
@@ -106,7 +115,7 @@ The report shows the mean time per call for B against A, by category, by layer a
 - saving: about 6 µs per event
 - loading with full validation: about 11 µs per event
 - a live refresh with a full 65,536-event buffer: about 3 ms (it was about 30 ms before M6)
-- opening and drawing a 65,536-event replay: about 28 ms, once
+- opening and drawing a 65,536-event replay: about 28 ms without rules, about 37–40 ms with the default rules (one rule pass is about 10 ms), once
 
 These are not end-to-end overheads on a real model. Method, full numbers and caveats are in [docs/benchmarks/](docs/benchmarks/).
 
@@ -116,6 +125,7 @@ These are not end-to-end overheads on a real model. Method, full numbers and cav
 - [Trace file format](docs/architecture/event-schema.md)
 - [ONNX Runtime adapter](docs/adapters/onnxruntime.md)
 - [Comparing traces](docs/compare/)
+- [Heuristic anomaly rules](docs/rules/)
 - [Benchmarks](docs/benchmarks/)
 - [Contributing](CONTRIBUTING.md)
 

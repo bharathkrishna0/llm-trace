@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "cli.hpp"
+#include "llm_trace/anomaly.hpp"
 #include "llm_trace/compare.hpp"
 #include "tui/app.hpp"
 
@@ -24,6 +25,33 @@ int main(int argc, char** argv) {
   if (o.version) {
     std::puts("llm-trace " LLM_TRACE_VERSION);
     return 0;
+  }
+
+  std::vector<AnomalyRule> rules = default_rules();
+  if (o.rules) {
+    try {
+      rules = load_rules_file(*o.rules);
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "llm-trace: invalid rules %s: %s\n", o.rules->c_str(), e.what());
+      return 2;
+    }
+  }
+
+  if (o.check) {
+    LoadedTrace trace;
+    try {
+      trace = load_trace(*o.check);
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "llm-trace: cannot load %s: %s\n", o.check->c_str(), e.what());
+      return 2;
+    }
+    for (const auto& w : trace.warnings)
+      std::fprintf(stderr, "llm-trace: warning: %s\n", w.c_str());
+    const AnomalyReport report = evaluate_rules(rules, trace.events);
+    std::fputs(
+        format_check_report(*o.check, trace.metadata, trace.events, rules, report, o.top).c_str(),
+        stdout);
+    return report.hits.empty() ? 0 : 1;
   }
 
   if (!o.compare.empty()) {
@@ -71,6 +99,7 @@ int main(int argc, char** argv) {
   demo.synthetic.seed = o.seed;
   demo.synthetic.steps_per_second = o.rate;
   demo.buffer_capacity = o.buffer;
+  demo.rules = rules;
 
   demo.output = o.output;
 
@@ -94,13 +123,15 @@ int main(int argc, char** argv) {
         }
       }
       const auto [w, h] = *o.print_frame;
-      std::fputs(tui::render_replay_frame(trace, demo.display, w, h, demo.display.color).c_str(),
-                 stdout);
+      std::fputs(
+          tui::render_replay_frame(trace, demo.display, w, h, demo.display.color, rules).c_str(),
+          stdout);
       return 0;
     }
     tui::ReplayOptions replay;
     replay.display = demo.display;
     replay.output = o.output;
+    replay.rules = rules;
     return tui::run_replay(trace, replay);
   }
 

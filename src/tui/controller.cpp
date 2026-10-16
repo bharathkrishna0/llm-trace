@@ -39,12 +39,29 @@ const TraceEvent* Controller::selected() const {
 
 void Controller::set_session(TraceSession session) {
   session_ = std::move(session);
+  evaluate_flags();
   rebuild_view();
 }
 
 void Controller::apply_delta(CollectorDelta delta) {
   session_.apply(std::move(delta));
+  const auto now = std::chrono::steady_clock::now();
+  if (!flags_at_ || now - *flags_at_ >= kFlagInterval) evaluate_flags();
   rebuild_view();
+}
+
+void Controller::evaluate_flags() {
+  flags_at_ = std::chrono::steady_clock::now();
+  flags_.clear();
+  if (rules_.empty()) return;
+  const auto& events = session_.events();
+  for (auto& hit : evaluate_rules(rules_, events).hits)
+    flags_[events[hit.event_index].sequence].push_back(std::move(hit));
+}
+
+const std::vector<AnomalyHit>* Controller::flags_for(const TraceEvent& event) const {
+  const auto it = flags_.find(event.sequence);
+  return it == flags_.end() ? nullptr : &it->second;
 }
 
 void Controller::rebuild_view() {
@@ -198,6 +215,19 @@ bool Controller::apply(const KeyResult& key, LayoutMode layout, std::size_t page
         state_.right_panel = Panel::Details;
       }
       break;
+    case Action::NextFlagged: {
+      const auto& events = session_.events();
+      for (std::size_t step = 1; step <= view_.size(); ++step) {
+        const std::size_t next = (row + step) % view_.size();
+        if (flags_.count(events[view_[next]].sequence)) {
+          select_row(next, page);
+          return true;
+        }
+      }
+      state_.notice = rules_.empty() ? "No heuristic rules loaded"
+                                     : "No event in this view matches a heuristic rule";
+      break;
+    }
     case Action::Quit:
       return false;
   }

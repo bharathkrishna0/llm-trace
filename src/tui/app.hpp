@@ -3,7 +3,9 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <vector>
 
+#include "llm_trace/anomaly.hpp"
 #include "llm_trace/synthetic.hpp"
 #include "llm_trace/trace_io.hpp"
 #include "tui/theme.hpp"
@@ -15,11 +17,13 @@ struct DemoOptions {
   SyntheticConfig synthetic;
   std::size_t buffer_capacity = 65536;
   std::optional<std::string> output;  // saved on exit and by 's'
+  std::vector<AnomalyRule> rules = default_rules();
 };
 
 struct ReplayOptions {
   DisplayOptions display;
   std::optional<std::string> output;  // target for 's'; defaults to a name from the run id
+  std::vector<AnomalyRule> rules = default_rules();
 };
 
 // Interactive offline replay of a loaded trace. Returns the process exit code.
@@ -27,7 +31,8 @@ int run_replay(const LoadedTrace& trace, const ReplayOptions& options);
 
 // Renders one frame of a loaded trace.
 std::string render_replay_frame(const LoadedTrace& trace, const DisplayOptions& display, int width,
-                                int height, bool styled);
+                                int height, bool styled,
+                                const std::vector<AnomalyRule>& rules = default_rules());
 
 // "llm-trace-<run id>.jsonl", with the run id reduced to portable file-name characters.
 std::string default_output_path(const TraceMetadata& metadata);

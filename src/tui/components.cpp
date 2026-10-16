@@ -44,6 +44,14 @@ std::string source_label(const TraceMetadata& m) {
   }
 }
 
+// Rule details are formatted by the core with UTF-8 units; ASCII mode needs plain "us".
+std::string display_text(const Ctx& ctx, std::string s) {
+  if (!ctx.ascii()) return s;
+  for (std::size_t at = s.find("\xC2\xB5"); at != std::string::npos; at = s.find("\xC2\xB5", at))
+    s.replace(at, 2, "u");
+  return s;
+}
+
 Element field(const Ctx& ctx, const std::string& label, Element value) {
   return hbox({text(label) | ctx.theme.text_secondary() | size(WIDTH, EQUAL, kLabelWidth),
                std::move(value) | flex});
@@ -164,7 +172,9 @@ Element operation_list(const Ctx& ctx, int pane_width) {
     std::string name = e.name;
     const bool flagged = e.type == EventType::Warning || e.type == EventType::AdapterError;
     if (flagged) name = std::string(ctx.theme.warn()) + " " + name + ": " + e.message;
-    Elements cells{text(selected ? std::string(ctx.theme.selected()) + " " : "  "),
+    const bool heuristic = ctx.c.flags_for(e) != nullptr;
+    Elements cells{text(selected ? std::string(ctx.theme.selected()) : " "),
+                   text(heuristic ? ctx.theme.warn() : " ") | ctx.theme.warning(),
                    text(truncate_utf8(name, static_cast<std::size_t>(name_w), ctx.ascii())) | flex};
     if (show_category)
       cells.push_back(text(to_string(e.category)) | ctx.theme.text_secondary() |
@@ -263,6 +273,14 @@ Element details(const Ctx& ctx) {
       rows.push_back(unavailable(ctx, caps.activation_summaries));
     }
   }
+  if (const auto* hits = ctx.c.flags_for(*e)) {
+    rows.push_back(text(""));
+    rows.push_back(section(ctx, "HEURISTIC FLAGS  (rule matches, not measured findings)"));
+    for (const auto& h : *hits)
+      rows.push_back(
+          hbox({text(std::string(ctx.theme.warn()) + " " + h.rule_id + ": ") | ctx.theme.warning(),
+                paragraph(display_text(ctx, h.detail)) | flex}));
+  }
   if (!e->attributes.empty() && ctx.layout == LayoutMode::Wide) {
     rows.push_back(text(""));
     rows.push_back(section(ctx, "SOURCE ATTRIBUTES"));
@@ -339,7 +357,14 @@ Element metrics_panel(const Ctx& ctx) {
   const auto warnings = s.warnings();
   rows.push_back(text(""));
   rows.push_back(section(ctx, "WARNINGS AND NOTES"));
-  if (warnings.empty()) rows.push_back(text("None") | ctx.theme.text_secondary());
+  if (warnings.empty() && ctx.c.flagged_count() == 0)
+    rows.push_back(text("None") | ctx.theme.text_secondary());
+  if (ctx.c.flagged_count() > 0)
+    rows.push_back(hbox({text(std::string(ctx.theme.warn()) + " ") | ctx.theme.warning(),
+                         paragraph(format_count(ctx.c.flagged_count()) +
+                                   " event(s) matched a heuristic rule; press n to step "
+                                   "through them. Rule matches are not measured findings.") |
+                             flex}));
   for (const auto& w : warnings)
     rows.push_back(hbox(
         {text(std::string(ctx.theme.warn()) + " ") | ctx.theme.warning(), paragraph(w) | flex}));
@@ -434,6 +459,7 @@ Element help_overlay(const Ctx& ctx) {
       key("t", "sort: source order, duration, name"),
       key("m", "toggle metrics panel"),
       key("p", "pause view (capture continues)"),
+      key("n", "next event flagged by a heuristic rule (!)"),
       key("s", "save trace as JSONL (all retained events)"),
       key("Esc", "close filter, help or panel"),
       key("q", "quit"),
@@ -445,6 +471,10 @@ Element help_overlay(const Ctx& ctx) {
       cap("activation summaries", caps.activation_summaries),
       cap("attention values", caps.attention_values),
   };
+  rows.push_back(text(""));
+  rows.push_back(text("HEURISTIC RULES") | bold);
+  if (ctx.c.rules().empty()) rows.push_back(text("None loaded") | ctx.theme.text_secondary());
+  for (const auto& r : ctx.c.rules()) rows.push_back(paragraph(describe_rule(r, ctx.ascii())));
   if (is_demo(m))
     rows.push_back(paragraph("Demo timings come from a synthetic cost model, not a real model.") |
                    ctx.theme.demo());
