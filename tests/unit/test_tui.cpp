@@ -239,3 +239,33 @@ TEST_CASE("notice replaces the footer hints instead of crowding the status strip
   c.apply(key(Action::MoveDown), LayoutMode::Wide, 10);
   CHECK(c.state().notice.empty());
 }
+
+TEST_CASE("heuristic flags mark rows and n steps through them") {
+  AnomalyRule rule;
+  rule.id = "qkv";
+  rule.kind = AnomalyRule::Kind::Match;
+  rule.filter = "name:qkv_proj";
+  DisplayOptions display;
+  display.color = false;
+  display.ascii = true;
+  Controller c(display, {rule});
+  c.set_session(demo_session());
+  REQUIRE(c.flagged_count() > 0);
+  CHECK(contains(render_plain(c, 140, 40), " !decoder.layer.00.attention.qkv_proj"));
+  c.apply(key(Action::NextFlagged), LayoutMode::Wide, 20);
+  REQUIRE(c.selected() != nullptr);
+  CHECK(contains(c.selected()->name, "qkv_proj"));
+  REQUIRE(c.flags_for(*c.selected()) != nullptr);
+  CHECK(c.flags_for(*c.selected())->front().rule_id == "qkv");
+  const std::string frame = render_plain(c, 140, 40);
+  CHECK(contains(frame, "HEURISTIC FLAGS"));
+}
+
+TEST_CASE("n without matches leaves the selection and explains why") {
+  Controller c(DisplayOptions{}, {});
+  c.set_session(demo_session());
+  const auto before = c.state().selected_row;
+  c.apply(key(Action::NextFlagged), LayoutMode::Wide, 20);
+  CHECK(c.state().selected_row == before);
+  CHECK(contains(c.state().notice, "No heuristic rules"));
+}

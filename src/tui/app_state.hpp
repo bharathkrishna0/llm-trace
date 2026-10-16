@@ -3,13 +3,16 @@
 // UI state and the controller that applies key actions to it. The controller owns
 // no rendering and no trace processing beyond calling TraceSession::query.
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "llm_trace/anomaly.hpp"
 #include "llm_trace/trace_session.hpp"
 #include "tui/theme.hpp"
 
@@ -50,6 +53,7 @@ enum class Action {
   FilterInput,
   FilterBackspace,
   FilterCommit,
+  NextFlagged,
 };
 
 struct KeyResult {
@@ -77,11 +81,16 @@ struct AppState {
 
 class Controller {
  public:
-  explicit Controller(DisplayOptions display = {}) : display_(display) {}
+  static constexpr std::chrono::milliseconds kFlagInterval{1000};
+
+  explicit Controller(DisplayOptions display = {}, std::vector<AnomalyRule> rules = default_rules())
+      : display_(display), rules_(std::move(rules)) {}
 
   // Replaces the displayed session and keeps the selection on the same event.
   void set_session(TraceSession session);
   // Live mode: applies only what changed in the collector since the last update.
+  // Heuristic rules are re-evaluated at most once per kFlagInterval here, because a
+  // full evaluation over a 65k-event buffer costs about 10 ms.
   void apply_delta(CollectorDelta delta);
 
   // Applies an action. Returns false when the application should quit.
@@ -94,13 +103,22 @@ class Controller {
   const TraceEvent* selected() const;
   void set_notice(std::string notice) { state_.notice = std::move(notice); }
 
+  // Heuristic rule matches for an event, or nullptr when no rule matched it.
+  const std::vector<AnomalyHit>* flags_for(const TraceEvent& event) const;
+  std::size_t flagged_count() const { return flags_.size(); }
+  const std::vector<AnomalyRule>& rules() const { return rules_; }
+
  private:
   void rebuild_view();
+  void evaluate_flags();
   void select_row(std::size_t row, std::size_t page_rows);
 
   DisplayOptions display_;
   TraceSession session_;
   std::vector<std::size_t> view_;
+  std::vector<AnomalyRule> rules_;
+  std::unordered_map<std::uint64_t, std::vector<AnomalyHit>> flags_;  // by event sequence
+  std::optional<std::chrono::steady_clock::time_point> flags_at_;
   EventFilter active_filter_;  // last filter that parsed; used while the input is invalid
   AppState state_;
 };

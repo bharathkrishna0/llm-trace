@@ -50,3 +50,23 @@ TEST_CASE("cli rejects invalid compare combinations") {
   CHECK_FALSE(parse({"--top", "5"}).error.empty());
   CHECK_FALSE(parse({"--compare-json", "x.json"}).error.empty());
 }
+
+TEST_CASE("cli parses --check and --rules") {
+  const auto r = parse({"--check", "t.jsonl", "--rules", "r.json", "--top", "3"});
+  REQUIRE(r.error.empty());
+  CHECK(r.options.check == std::optional<std::string>("t.jsonl"));
+  CHECK(r.options.rules == std::optional<std::string>("r.json"));
+  CHECK(r.options.top == 3);
+  CHECK(parse({"--open", "t.jsonl", "--rules", "r.json"}).error.empty());
+  CHECK(parse({"--demo", "--rules=r.json"}).error.empty());
+}
+
+TEST_CASE("cli rejects --check and --rules in the wrong mode") {
+  CHECK_FALSE(parse({"--rules", "r.json"}).error.empty());
+  CHECK_FALSE(parse({"--check", "t", "--open", "u"}).error.empty());
+  CHECK_FALSE(parse({"--check", "t", "--demo"}).error.empty());
+  CHECK_FALSE(parse({"--check", "t", "--compare", "a", "b"}).error.empty());
+  CHECK_FALSE(parse({"--check", "t", "--compare-json", "-"}).error.empty());
+  CHECK_FALSE(parse({"--compare", "a", "b", "--rules", "r.json"}).error.empty());
+  CHECK_FALSE(parse({"--check"}).error.empty());
+}

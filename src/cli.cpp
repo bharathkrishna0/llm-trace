@@ -48,6 +48,7 @@ std::string usage() {
          "  llm-trace --demo [demo options] [--output FILE] [display options]\n"
          "  llm-trace --open FILE [--output FILE] [display options]\n"
          "  llm-trace --compare A B [compare options]\n"
+         "  llm-trace --check FILE [--rules RULES] [--top N]\n"
          "  llm-trace --help | --version\n"
          "\n"
          "Modes:\n"
@@ -57,11 +58,16 @@ std::string usage() {
          "      --output FILE      Save the trace as JSONL on exit (and with 's').\n"
          "      --compare A B      Print per-category, per-layer and per-op latency changes\n"
          "                         of trace B against trace A (JSONL or ONNX profile).\n"
+         "      --check FILE       List events that match the heuristic rules. Exit code\n"
+         "                         0 = none matched, 1 = some matched, 2 = error.\n"
+         "      --rules RULES      JSON rules file for --demo, --open or --check\n"
+         "                         (default: slow-vs-p95 and large-share, see docs/rules)\n"
          "\n"
          "Compare options:\n"
          "      --compare-by KEY   Match ops by 'name' (default) or 'op' (op type)\n"
          "      --compare-json F   Also write the comparison as JSON to F ('-' = stdout only)\n"
-         "      --top N            Rows per operation table (1-10000, default 20)\n"
+         "      --top N            Rows per table, or events listed by --check\n"
+         "                         (1-10000, default 20)\n"
          "\n"
          "Demo options:\n"
          "      --layers N         Decoder layers (1-256, default 12)\n"
@@ -148,6 +154,9 @@ ParseResult parse(const std::vector<std::string>& args) {
     } else if (arg == "--top") {
       if (!take() || !parse_u64(value, 1, 10'000, u)) return fail("--top expects 1-10000");
       o.top = static_cast<std::size_t>(u);
+    } else if (arg == "--rules" || arg == "--check") {
+      if (!take() || value.empty()) return fail(arg + " expects a file path");
+      (arg == "--rules" ? o.rules : o.check) = value;
     } else if (arg == "--open" || arg == "--output") {
       if (!take() || value.empty()) return fail(arg + " expects a file path");
       (arg == "--open" ? o.open : o.output) = value;
@@ -155,11 +164,18 @@ ParseResult parse(const std::vector<std::string>& args) {
       return fail("unknown option: " + args[i]);
     }
   }
-  const bool compare_extras = o.compare_json || o.compare_by_op || o.top != 20;
-  if (!o.compare.empty() && (o.open || o.demo || o.output || o.print_frame)) {
-    result.error = "--compare cannot be combined with --open, --demo, --output or --print-frame";
+  const bool compare_extras = o.compare_json || o.compare_by_op;
+  if (!o.compare.empty() && (o.open || o.demo || o.output || o.print_frame || o.check)) {
+    result.error =
+        "--compare cannot be combined with --open, --demo, --output, --print-frame or --check";
   } else if (o.compare.empty() && compare_extras) {
-    result.error = "--compare-json, --compare-by and --top need --compare";
+    result.error = "--compare-json and --compare-by need --compare";
+  } else if (o.compare.empty() && !o.check && o.top != 20) {
+    result.error = "--top needs --compare or --check";
+  } else if (o.check && (o.open || o.demo || o.output || o.print_frame)) {
+    result.error = "--check cannot be combined with --open, --demo, --output or --print-frame";
+  } else if (o.rules && !o.open && !o.demo && !o.check) {
+    result.error = "--rules needs --demo, --open or --check";
   } else if (o.open && o.demo) {
     result.error = "--open and --demo cannot be combined";
   } else if (o.output && !o.open && !o.demo) {

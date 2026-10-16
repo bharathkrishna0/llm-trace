@@ -37,6 +37,7 @@ add_library(llm_trace_core
   src/core/format.cpp
   src/core/collector.cpp
   src/core/synthetic.cpp
+  src/core/anomaly.cpp
   src/core/compare.cpp
   src/core/event_filter.cpp
   src/core/trace_session.cpp

@@ -43,6 +43,21 @@ The two live-refresh rows run in the same M6 binary, so they compare the old and
 
 Memory: `sizeof(TraceEvent)` is 448 bytes, plus heap for names and tensor shapes. A saved event is about 503 bytes of JSONL.
 
+## Heuristic rules (2026-10-13, M8)
+
+The M8 binary was compared with `main` (M7) in the same way: alternately, twice each. This VM was noisy during these runs. main's first run was about 2× slower than its second on every frame case, so the table shows both runs.
+
+| Case | main (M7) | M8 |
+|---|---|---|
+| Open + render one 160×45 replay frame, 65,536 events | 55.0 / 27.1 ms | 40.4 / 37.1 ms |
+| Live refresh, `delta_since` path, 65,536 + 1,000 events, rules off | 6.0 / 2.8 ms | 2.8 / 2.9 ms |
+| Live refresh, same, default rules on (throttled) | — | 2.9 / 2.8 ms |
+| One pass of the default rules over 65,536 events | — | 9.9 / 10.3 ms |
+
+- **One pass of the rules costs about 10 ms** at 65,536 events. Most of it is grouping every timed op by a hash of its name and input shapes, then a partial sort (`nth_element`) per group for the p95. A first version that built a key string per event took about 30 ms.
+- **Opening a replay** now runs that pass once, so the open-and-draw case rose from about 27 ms to about 37–40 ms (comparing with main's quieter run).
+- **Live view.** The TUI re-evaluates rules at most once per second. The live-refresh rows above therefore mostly measure refreshes that skip the pass. A refresh that includes the pass costs about 10 ms more, so about 13 ms; before throttling, every refresh measured 12.8 ms. Events that arrived since the last pass are not flagged until the next one, up to about 1 s later.
+
 ## What this means, and what it does not
 
 - Storing an event costs about 0.2 µs, mostly the copy of its strings and tensors. That is small next to a transformer kernel lasting microseconds to milliseconds. However, it is **not** a measured end-to-end overhead on a real model, because live runtime capture is not implemented yet.

@@ -30,6 +30,8 @@ struct Options {
   std::optional<std::string> compare_json;  // "-" = stdout
   bool compare_by_op = false;
   std::size_t top = 20;
+  std::optional<std::string> rules;  // heuristic rules file for --demo, --open, --check
+  std::optional<std::string> check;  // trace to check against the rules
 };
 
 struct ParseResult {

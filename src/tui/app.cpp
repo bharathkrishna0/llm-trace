@@ -122,7 +122,7 @@ int run_demo(const DemoOptions& options) {
   std::atomic<bool> stop{false};
   std::thread worker([&] { adapter.run(collector, stop); });
 
-  Controller controller(options.display);
+  Controller controller(options.display, options.rules);
   std::uint64_t shown_version = UINT64_MAX;
   std::uint64_t next_sequence = 0;
   auto refresh = [&] {
@@ -168,7 +168,7 @@ int run_demo(const DemoOptions& options) {
 }
 
 int run_replay(const LoadedTrace& trace, const ReplayOptions& options) {
-  Controller controller(options.display);
+  Controller controller(options.display, options.rules);
   controller.set_session(session_from(trace));
   const std::string save_path = options.output.value_or(default_output_path(trace.metadata));
   auto save = [&] {
@@ -180,8 +180,8 @@ int run_replay(const LoadedTrace& trace, const ReplayOptions& options) {
 }
 
 std::string render_replay_frame(const LoadedTrace& trace, const DisplayOptions& display, int width,
-                                int height, bool styled) {
-  Controller controller(display);
+                                int height, bool styled, const std::vector<AnomalyRule>& rules) {
+  Controller controller(display, rules);
   controller.set_session(session_from(trace));
   return styled ? render_styled(controller, width, height)
                 : render_plain(controller, width, height);
@@ -207,7 +207,7 @@ std::string render_demo_frame(const DemoOptions& options, int width, int height,
   std::atomic<bool> stop{false};
   adapter.run(collector, stop);
   if (options.output) save_collector(collector, *options.output);
-  Controller controller(options.display);
+  Controller controller(options.display, options.rules);
   controller.set_session(session_from(collector));
   return styled ? render_styled(controller, width, height)
                 : render_plain(controller, width, height);

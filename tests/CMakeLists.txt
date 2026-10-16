@@ -5,6 +5,7 @@ add_executable(llm_trace_tests
   unit/test_cli.cpp
   unit/test_ring_buffer.cpp
   unit/test_collector.cpp
+  unit/test_anomaly.cpp
   unit/test_compare.cpp
   unit/test_event_filter.cpp
   unit/test_trace_session.cpp
@@ -65,3 +66,21 @@ set_tests_properties(cli_compare_onnx_json PROPERTIES PASS_REGULAR_EXPRESSION "l
 add_test(NAME cli_compare_missing
   COMMAND llm-trace --compare ${CMAKE_SOURCE_DIR}/tests/fixtures/jsonl/synthetic_small.jsonl ${CMAKE_CURRENT_BINARY_DIR}/does-not-exist.jsonl)
 set_tests_properties(cli_compare_missing PROPERTIES WILL_FAIL TRUE)
+
+# Heuristic rule checks: clean fixture exits 0, matches exit 1, bad rules exit 2.
+set(LT_ORT_FIXTURE ${CMAKE_SOURCE_DIR}/tests/fixtures/onnx_profiles/tiny_transformer_ort-1.20.1.json)
+add_test(NAME cli_check_clean COMMAND llm-trace --check ${LT_ORT_FIXTURE})
+set_tests_properties(cli_check_clean PROPERTIES PASS_REGULAR_EXPRESSION "Flagged events: 0")
+add_test(NAME cli_check_matches
+  COMMAND llm-trace --check ${LT_ORT_FIXTURE} --rules ${CMAKE_SOURCE_DIR}/tests/fixtures/rules/slow_ops.json --top 2)
+set_tests_properties(cli_check_matches PROPERTIES WILL_FAIL TRUE)
+add_test(NAME cli_check_matches_output
+  COMMAND llm-trace --check ${LT_ORT_FIXTURE} --rules ${CMAKE_SOURCE_DIR}/tests/fixtures/rules/slow_ops.json --top 2)
+set_tests_properties(cli_check_matches_output PROPERTIES
+  PASS_REGULAR_EXPRESSION "not a measured finding.*Flagged events: [1-9].*over-4us: matches")
+add_test(NAME cli_check_bad_rules
+  COMMAND llm-trace --check ${LT_ORT_FIXTURE} --rules ${CMAKE_SOURCE_DIR}/tests/fixtures/rules/bad_field.json)
+set_tests_properties(cli_check_bad_rules PROPERTIES WILL_FAIL TRUE)
+add_test(NAME cli_open_with_rules
+  COMMAND llm-trace --open ${LT_ORT_FIXTURE} --rules ${CMAKE_SOURCE_DIR}/tests/fixtures/rules/slow_ops.json --no-color --ascii --print-frame 120x30)
+set_tests_properties(cli_open_with_rules PROPERTIES PASS_REGULAR_EXPRESSION " !/layers")
