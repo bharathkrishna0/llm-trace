@@ -2,6 +2,7 @@
 #include <ftxui/component/event.hpp>
 
 #include "llm_trace/synthetic.hpp"
+#include "llm_trace/trace_io.hpp"
 #include "tui/app.hpp"
 #include "tui/app_state.hpp"
 #include "tui/render.hpp"
@@ -268,4 +269,19 @@ TEST_CASE("n without matches leaves the selection and explains why") {
   c.apply(key(Action::NextFlagged), LayoutMode::Wide, 20);
   CHECK(c.state().selected_row == before);
   CHECK(contains(c.state().notice, "No heuristic rules"));
+}
+
+TEST_CASE("real activation summaries are shown for events that have one") {
+  auto t = read_jsonl(std::string(LLM_TRACE_SOURCE_DIR) +
+                      "/tests/fixtures/jsonl/tiny_activations_ort-1.20.1.jsonl");
+  Controller c;
+  c.set_session(TraceSession(t.metadata, std::move(t.events), {}));
+  for (char ch : std::string("up_proj"))
+    c.apply(key(Action::FilterInput, std::string(1, ch)), LayoutMode::Wide, 10);
+  const auto frame = render_plain(c, 160, 50);
+  CHECK(contains(frame, "ACTIVATION SUMMARY"));
+  CHECK(contains(frame, "mean / std"));
+  CHECK(contains(frame, "NaN / Inf"));
+  CHECK(contains(frame, "(whole tensor)"));
+  CHECK(contains(frame, "activation_tensor"));
 }

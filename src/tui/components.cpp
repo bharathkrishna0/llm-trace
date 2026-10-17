@@ -267,8 +267,19 @@ Element details(const Ctx& ctx) {
         std::snprintf(buf, sizeof(buf), "%.6g", v);
         return std::string(buf);
       };
-      rows.push_back(field(ctx, "mean / std", fmt(a.mean) + " / " + fmt(a.stddev)));
-      rows.push_back(field(ctx, "min / max", fmt(a.min) + " / " + fmt(a.max)));
+      const std::uint64_t finite =
+          a.sampled_elements - std::min(a.sampled_elements, a.nonfinite_count);
+      if (finite == 0) {
+        rows.push_back(field(ctx, "values", "no finite values"));
+      } else {
+        rows.push_back(field(ctx, "mean / std", fmt(a.mean) + " / " + fmt(a.stddev)));
+        rows.push_back(field(ctx, "min / max", fmt(a.min) + " / " + fmt(a.max)));
+        rows.push_back(field(ctx, "|x| < " + fmt(a.sparsity_epsilon), format_percent(a.sparsity)));
+      }
+      rows.push_back(field(ctx, "NaN / Inf", format_count(a.nonfinite_count)));
+      rows.push_back(field(
+          ctx, "elements",
+          format_count(a.sampled_elements) + (a.full_tensor ? " (whole tensor)" : " (sample)")));
     } else {
       rows.push_back(unavailable(ctx, caps.activation_summaries));
     }

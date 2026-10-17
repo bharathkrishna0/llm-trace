@@ -81,11 +81,13 @@ Traces are versioned JSON Lines ([format](docs/architecture/event-schema.md)). F
 llm-trace --open onnxruntime_profile_2026-01-01_12-00-00.json
 ```
 
-This reads the profile ONNX Runtime writes when profiling is enabled (tested with 1.20.1). It shows per-kernel timing, op type, provider and input/output shapes. ONNX Runtime profiles contain no tensor values, so attention and activation data are shown as unavailable. Profiling itself slows inference down: about 6.8x on the tiny test model, where per-node overhead dominates. See [docs/adapters/onnxruntime.md](docs/adapters/onnxruntime.md) for the field mapping, how to produce a profile, and the overhead measurement.
+This reads the profile ONNX Runtime writes when profiling is enabled (tested with 1.20.1). It shows per-kernel timing, op type, provider and input/output shapes. ONNX Runtime profiles contain no tensor values, so attention and activation data are shown as unavailable. Profiling itself slows inference down: about 7–13x on the tiny test model (two measurement rounds differed), where per-node overhead dominates. See [docs/adapters/onnxruntime.md](docs/adapters/onnxruntime.md) for the field mapping, how to produce a profile, and the overhead measurement.
+
+**Real activation summaries (opt-in).** `scripts/expose_activations.py` copies a model so that chosen intermediate tensors become outputs. `onnx_profile_runner --activations trace.jsonl` then records mean/min/max/std, the NaN/Inf count and the near-zero share of the real values for each of those nodes, next to their kernel timings. Exposing outputs made the tiny model about 35 % slower. The details panel shows the numbers only for events that have them.
 
 ## What it does not do
 
-- It does not show attention weights, activation statistics or token positions for ONNX Runtime. The profile doesn't contain them, so the UI says "Not exposed by adapter" rather than guessing.
+- It does not show attention weights or token positions for ONNX Runtime. The profile doesn't contain them, so the UI says "Not exposed by adapter" rather than guessing. Activation statistics are only available through the opt-in runner mode below, for nodes you expose.
 - Synthetic demo timings are a cost model, not measurements.
 - There is no live hook into a runtime and no GPU-specific data. Only the CPU execution provider has been tested.
 - There is no network access and no telemetry. It reads and writes only the files you name.

@@ -37,6 +37,7 @@ add_library(llm_trace_core
   src/core/format.cpp
   src/core/collector.cpp
   src/core/synthetic.cpp
+  src/core/activation.cpp
   src/core/anomaly.cpp
   src/core/compare.cpp
   src/core/event_filter.cpp
@@ -115,6 +116,6 @@ if(LLM_TRACE_BUILD_ORT_RUNNER)
   find_library(ONNXRUNTIME_LIBRARY onnxruntime PATHS ${ONNXRUNTIME_ROOT}/lib NO_DEFAULT_PATH REQUIRED)
   add_executable(onnx_profile_runner examples/onnx/onnx_profile_runner.cpp)
   target_include_directories(onnx_profile_runner PRIVATE ${ONNXRUNTIME_INCLUDE_DIR})
-  target_link_libraries(onnx_profile_runner PRIVATE ${ONNXRUNTIME_LIBRARY})
+  target_link_libraries(onnx_profile_runner PRIVATE llm_trace_core nlohmann_json::nlohmann_json ${ONNXRUNTIME_LIBRARY})
   set_target_properties(onnx_profile_runner PROPERTIES BUILD_RPATH ${ONNXRUNTIME_ROOT}/lib)
 endif()
